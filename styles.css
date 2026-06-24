@@ -955,6 +955,29 @@ button:disabled {
   color: #166534;
   font-weight: 800;
 }
+.upload-status-panel {
+  display: grid;
+  gap: .65rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, .82);
+}
+.upload-status-panel h4 {
+  margin: 0;
+}
+.status-list {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.manual-review-active {
+  outline: 3px solid rgba(37, 99, 235, .22);
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, .08), var(--shadow);
+}
 .credit-intel-dashboard { display: grid; gap: 1rem; }
 .intel-hero {
   display: flex;
