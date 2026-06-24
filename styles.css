@@ -487,3 +487,67 @@ button:disabled {
     background: var(--line);
   }
 }
+
+.revenue-entry-grid,
+.revenue-summary-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.compact-header {
+  margin: 0;
+}
+
+.chart-list {
+  display: grid;
+  gap: .85rem;
+}
+
+.chart-row {
+  display: grid;
+  gap: .4rem;
+}
+
+.chart-row-label {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  color: #344054;
+  font-size: .85rem;
+  font-weight: 800;
+}
+
+.chart-row-label strong {
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+
+.chart-track {
+  height: .7rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5edf8;
+}
+
+.chart-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
+}
+
+.revenue-card.income-card {
+  border-color: #bbf7d0;
+}
+
+.revenue-card.expense-card {
+  border-color: #fecaca;
+}
+
+@media (min-width: 900px) {
+  .revenue-entry-grid,
+  .revenue-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
