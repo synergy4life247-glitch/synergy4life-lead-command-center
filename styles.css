@@ -551,3 +551,44 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.content-metrics .metric-card { min-height: 88px; }
+.content-controls { position: sticky; top: 0; z-index: 2; }
+.content-calendar-widget,
+.content-idea-widget { margin-bottom: 1rem; }
+.content-calendar {
+  display: grid;
+  gap: .75rem;
+}
+.calendar-item {
+  display: grid;
+  grid-template-columns: minmax(92px, auto) 1fr;
+  gap: .75rem;
+  align-items: start;
+  padding: .85rem;
+  border: 1px solid var(--line);
+  border-radius: .95rem;
+  background: #f8fbff;
+}
+.calendar-item time {
+  color: var(--brand-dark);
+  font-size: .8rem;
+  font-weight: 900;
+}
+.calendar-item div {
+  display: grid;
+  gap: .25rem;
+}
+.calendar-item span {
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.content-card dl dd { white-space: pre-wrap; }
+.content-card.status-idea { border-color: #bfdbfe; }
+.content-card.status-scheduled { border-color: #fde68a; }
+.content-card.status-posted { border-color: #bbf7d0; }
+
+@media (min-width: 720px) {
+  .content-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
