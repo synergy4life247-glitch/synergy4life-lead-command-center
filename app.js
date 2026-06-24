@@ -15,6 +15,7 @@ const TEAM_KEY = 'synergy4life.teamMembers';
 const CONTENT_KEY = 'synergy4life.contentCenter';
 const AUTOMATIONS_KEY = 'synergy4life.automations';
 const ONBOARDING_KEY = 'synergy4life.onboarding';
+const DISPUTES_KEY = 'synergy4life.disputeCenter';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -86,6 +87,11 @@ const onboardingServiceOptions = ['Credit Repair', 'Mentorship', 'Backend Soluti
 const onboardingStatusOptions = ['New Enrollment', 'Waiting Documents', 'Documents Received', 'Analysis Pending', 'Ready For Round 1', 'Active Client', 'Completed'];
 const onboardingChecklistFields = ['agreementSigned', 'invoicePaid', 'identityIqReceived', 'creditReportReceived', 'driverLicenseReceived', 'proofOfAddressReceived', 'portalSetupCompleted', 'welcomeEmailSent', 'initialAnalysisCompleted', 'round1Started'];
 const onboardingFields = ['onboardingClientName', 'onboardingEmail', 'onboardingPhone', 'onboardingService', 'onboardingStatus', 'onboardingEnrollmentDate', 'onboardingAssignedTeamMember', ...onboardingChecklistFields, 'onboardingNotes'];
+const disputeLetterTypes = ['Round 1 Factual', 'Round 2 Factual', 'Round 3 Escalation', 'Method of Verification', 'CFPB Complaint', 'FTC Complaint', 'Creditor Direct Dispute', 'Late Payment Dispute', 'Collection Dispute', 'Charge-Off Dispute', 'Bankruptcy Dispute', 'Repo Dispute', 'Identity Theft', 'Personal Information', 'Attorney Escalation'];
+const disputeBureauOptions = ['Equifax', 'Experian', 'TransUnion', 'Creditor', 'Collector', 'CFPB', 'FTC', 'Attorney'];
+const disputeStatusOptions = ['Draft', 'Ready To Send', 'Sent', 'Waiting Response', 'Verified', 'Deleted', 'Escalated', 'Attorney Review', 'Completed'];
+const disputeResultOptions = ['Pending', 'Deleted', 'Updated', 'Verified', 'No Response', 'Reinserted'];
+const disputeFields = ['disputeClientName', 'disputeCreditor', 'disputeBureau', 'disputeAccountType', 'disputeReason', 'disputeLetterType', 'disputeDateSent', 'disputeResponseDueDate', 'disputeStatus', 'disputeResult', 'disputeAssignedTeamMember', 'disputeNotes'];
 const automationFields = ['automationName', 'automationCategory', 'automationDescription', 'automationAssignedTeamMember', 'automationTriggerDate', 'automationFrequency', 'automationLastCompleted', 'automationNextDueDate', 'automationStatus', 'automationPriority', 'automationNotes'];
 
 const form = document.querySelector('#conversation-form');
@@ -188,6 +194,14 @@ const onboardingSearch = document.querySelector('#onboarding-search');
 const onboardingStatusFilter = document.querySelector('#onboarding-status-filter');
 const onboardingServiceFilter = document.querySelector('#onboarding-service-filter');
 const onboardingTeamFilter = document.querySelector('#onboarding-team-filter');
+const disputeForm = document.querySelector('#dispute-form');
+const disputeList = document.querySelector('#dispute-list');
+const disputeCount = document.querySelector('#dispute-count');
+const disputeSearch = document.querySelector('#dispute-search');
+const disputeBureauFilter = document.querySelector('#dispute-bureau-filter');
+const disputeCreditorFilter = document.querySelector('#dispute-creditor-filter');
+const disputeStatusFilter = document.querySelector('#dispute-status-filter');
+const disputeResultFilter = document.querySelector('#dispute-result-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -1144,6 +1158,104 @@ function updateMortgageReadinessPreview() {
     <article class="preview-card recommendations"><span>Recommendations</span><p>${escapeHtml(calc.recommendations.join(' • '))}</p></article>`;
 }
 
+
+function getDisputeFormData() {
+  return disputeFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetDisputeForm() {
+  disputeForm.reset();
+  document.querySelector('#dispute-id').value = '';
+  document.querySelector('#disputeBureau').value = 'Equifax';
+  document.querySelector('#disputeLetterType').value = 'Round 1 Factual';
+  document.querySelector('#disputeStatus').value = 'Draft';
+  document.querySelector('#disputeResult').value = 'Pending';
+}
+
+function isDisputeOverdue(dispute) {
+  return dispute.disputeResponseDueDate && dispute.disputeResponseDueDate < todayDateString() && !['Deleted', 'Verified', 'Completed'].includes(dispute.disputeStatus || '');
+}
+
+function saveDispute(event) {
+  event.preventDefault();
+  const disputes = readStore(DISPUTES_KEY);
+  const id = document.querySelector('#dispute-id').value || crypto.randomUUID();
+  const existing = disputes.findIndex((dispute) => dispute.id === id);
+  const record = {
+    id,
+    ...getDisputeFormData(),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? disputes[existing].createdAt : new Date().toISOString(),
+  };
+  if (existing >= 0) disputes[existing] = record;
+  else disputes.unshift(record);
+  writeStore(DISPUTES_KEY, disputes);
+  resetDisputeForm();
+  render();
+}
+
+function editDispute(id) {
+  const dispute = readStore(DISPUTES_KEY).find((item) => item.id === id);
+  if (!dispute) return;
+  document.querySelector('#dispute-id').value = dispute.id;
+  disputeFields.forEach((field) => document.querySelector(`#${field}`).value = dispute[field] || '');
+  document.querySelector('[data-tab="dispute-center"]').click();
+  disputeForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteDispute(id) {
+  writeStore(DISPUTES_KEY, readStore(DISPUTES_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredDisputes(disputes) {
+  const query = disputeSearch.value.trim().toLowerCase();
+  const creditor = disputeCreditorFilter.value.trim().toLowerCase();
+  return disputes.filter((dispute) => {
+    const searchable = disputeFields.map((field) => dispute[field]).join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!disputeBureauFilter.value || dispute.disputeBureau === disputeBureauFilter.value)
+      && (!creditor || (dispute.disputeCreditor || '').toLowerCase().includes(creditor))
+      && (!disputeStatusFilter.value || dispute.disputeStatus === disputeStatusFilter.value)
+      && (!disputeResultFilter.value || dispute.disputeResult === disputeResultFilter.value);
+  });
+}
+
+function renderDisputeMetrics(disputes) {
+  document.querySelector('#metric-dispute-sent').textContent = disputes.filter((dispute) => ['Sent', 'Waiting Response', 'Verified', 'Deleted', 'Escalated', 'Attorney Review', 'Completed'].includes(dispute.disputeStatus)).length;
+  document.querySelector('#metric-dispute-pending').textContent = disputes.filter((dispute) => dispute.disputeStatus === 'Waiting Response' || dispute.disputeResult === 'Pending').length;
+  document.querySelector('#metric-dispute-verified').textContent = disputes.filter((dispute) => dispute.disputeStatus === 'Verified' || dispute.disputeResult === 'Verified').length;
+  document.querySelector('#metric-dispute-deleted').textContent = disputes.filter((dispute) => dispute.disputeStatus === 'Deleted' || dispute.disputeResult === 'Deleted').length;
+  document.querySelector('#metric-dispute-escalations').textContent = disputes.filter((dispute) => ['Escalated', 'Attorney Review'].includes(dispute.disputeStatus) || ['Round 3 Escalation', 'Attorney Escalation', 'CFPB Complaint', 'FTC Complaint'].includes(dispute.disputeLetterType)).length;
+}
+
+function renderDisputeCard(dispute) {
+  const card = document.createElement('article');
+  const overdue = isDisputeOverdue(dispute);
+  card.className = `card dispute-card${overdue ? ' dispute-overdue' : ''}`;
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(dispute.disputeLetterType || 'Letter')}</span><span class="badge">${escapeHtml(dispute.disputeStatus || 'Draft')}</span><span class="badge">${escapeHtml(dispute.disputeResult || 'Pending')}</span>${overdue ? '<span class="badge danger-badge">Overdue response</span>' : ''}</div>
+    <h3>${escapeHtml(dispute.disputeClientName || 'Unnamed client')}</h3>
+    <p class="group">${escapeHtml(dispute.disputeCreditor || 'No creditor')} • ${escapeHtml(dispute.disputeBureau || 'No bureau')} • ${escapeHtml(dispute.disputeAccountType || 'No account type')}</p>
+    <dl>
+      ${detail('Dispute Reason', dispute.disputeReason)}
+      ${detail('Date Sent', formatDate(dispute.disputeDateSent))}
+      ${detail('Response Due Date', formatDate(dispute.disputeResponseDueDate))}
+      ${detail('Assigned Team Member', dispute.disputeAssignedTeamMember)}
+      ${detail('Notes', dispute.disputeNotes)}
+    </dl>
+    <div class="card-actions">
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.querySelector('.edit').addEventListener('click', () => editDispute(dispute.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteDispute(dispute.id));
+  return card;
+}
+
 function getTaskFormData() {
   return taskFields.reduce((data, field) => {
     data[field] = document.querySelector(`#${field}`).value.trim();
@@ -2095,6 +2207,7 @@ function render() {
   const tasks = getTasks();
   const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
+  const disputes = readStore(DISPUTES_KEY);
   const documents = readStore(DOCUMENTS_KEY);
   const communications = readStore(COMMUNICATIONS_KEY);
   const revenueRecords = getRevenueRecords();
@@ -2110,6 +2223,7 @@ function render() {
   taskCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
   creditIntelligenceCount.textContent = `${creditIntelligence.length} report${creditIntelligence.length === 1 ? '' : 's'}`;
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
+  disputeCount.textContent = `${disputes.length} dispute${disputes.length === 1 ? '' : 's'}`;
   documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
   communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
   revenueTransactionCount.textContent = `${revenueRecords.length} transaction${revenueRecords.length === 1 ? '' : 's'}`;
@@ -2125,6 +2239,7 @@ function render() {
   renderCreditIntelligenceMetrics(creditIntelligence);
   renderMortgageMetrics(mortgageReadiness);
   updateDocumentClientFilter(documents);
+  renderDisputeMetrics(disputes);
   renderDocumentMetrics(documents);
   renderDocumentClientCounts(documents);
   renderCommunicationMetrics(communications);
@@ -2146,6 +2261,7 @@ function render() {
   creditIntelligenceList.innerHTML = '';
   mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
+  disputeList.innerHTML = '';
   documentList.innerHTML = '';
   communicationList.innerHTML = '';
   revenueTransactionList.innerHTML = '';
@@ -2171,6 +2287,10 @@ function render() {
   const filteredClients = getFilteredClients(clients);
   if (!filteredClients.length) clientList.innerHTML = '<p class="empty-message">No clients match your current view. Add a client or adjust your filters.</p>';
   filteredClients.forEach((client) => clientList.append(renderClientCard(client)));
+
+  const filteredDisputes = getFilteredDisputes(disputes);
+  if (!filteredDisputes.length) disputeList.innerHTML = '<p class="empty-message">No dispute records match your current view. Add a dispute letter workflow or adjust your filters.</p>';
+  filteredDisputes.forEach((dispute) => disputeList.append(renderDisputeCard(dispute)));
 
   const filteredDocuments = getFilteredDocuments(documents);
   if (!filteredDocuments.length) documentList.innerHTML = '<p class="empty-message">No documents match your current view. Upload a document or adjust your filters.</p>';
@@ -2246,6 +2366,13 @@ seedSelect(document.querySelector('#taskStatus'), taskStatusOptions);
 seedSelect(taskStatusFilter, taskStatusOptions, 'All statuses');
 seedSelect(taskPriorityFilter, taskPriorityOptions, 'All priorities');
 seedSelect(taskSourceFilter, taskSourceOptions, 'All source modules');
+seedSelect(document.querySelector('#disputeBureau'), disputeBureauOptions);
+seedSelect(document.querySelector('#disputeLetterType'), disputeLetterTypes);
+seedSelect(document.querySelector('#disputeStatus'), disputeStatusOptions);
+seedSelect(document.querySelector('#disputeResult'), disputeResultOptions);
+seedSelect(disputeBureauFilter, disputeBureauOptions, 'All bureaus');
+seedSelect(disputeStatusFilter, disputeStatusOptions, 'All statuses');
+seedSelect(disputeResultFilter, disputeResultOptions, 'All results');
 seedSelect(document.querySelector('#documentCategory'), documentCategories);
 seedSelect(document.querySelector('#documentStatus'), documentStatusOptions);
 seedSelect(documentCategoryFilter, documentCategories, 'All categories');
@@ -2290,6 +2417,7 @@ creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
+disputeForm.addEventListener('submit', saveDispute);
 documentForm.addEventListener('submit', saveDocument);
 communicationForm.addEventListener('submit', saveCommunication);
 incomeForm.addEventListener('submit', saveIncome);
@@ -2304,6 +2432,7 @@ document.querySelector('#reset-pipeline-form').addEventListener('click', resetPi
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
 document.querySelector('#reset-credit-intelligence-form').addEventListener('click', resetCreditIntelligenceForm);
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
+document.querySelector('#reset-dispute-form').addEventListener('click', resetDisputeForm);
 document.querySelector('#reset-document-form').addEventListener('click', resetDocumentForm);
 document.querySelector('#reset-communication-form').addEventListener('click', resetCommunicationForm);
 document.querySelector('#reset-income-form').addEventListener('click', resetIncomeForm);
@@ -2328,6 +2457,8 @@ pipelineSourceFilter.addEventListener('input', render);
 pipelineStageFilter.addEventListener('change', render);
 creditFileSearch.addEventListener('input', render);
 taskSearch.addEventListener('input', render);
+disputeSearch.addEventListener('input', render);
+disputeCreditorFilter.addEventListener('input', render);
 documentSearch.addEventListener('input', render);
 communicationSearch.addEventListener('input', render);
 communicationDateFilter.addEventListener('change', render);
@@ -2343,10 +2474,12 @@ onboardingSearch.addEventListener('input', render);
 [onboardingStatusFilter, onboardingServiceFilter, onboardingTeamFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
+[disputeBureauFilter, disputeStatusFilter, disputeResultFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
 [communicationContactFilter, communicationTypeFilter, communicationOutcomeFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 updateCreditIntelligencePreview();
+resetDisputeForm();
 resetDocumentForm();
 resetCommunicationForm();
 resetIncomeForm();
