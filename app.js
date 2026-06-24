@@ -190,10 +190,12 @@ const creditIntelligencePreview = document.querySelector('#credit-intelligence-p
 const creditFileIntelligenceCount = document.querySelector('#credit-file-intelligence-count');
 const creditReportUpload = document.querySelector('#credit-report-upload');
 const creditReportUploadButton = document.querySelector('#credit-report-upload-button');
+const creditReportUploadNewButton = document.querySelector('#credit-report-upload-new-button');
 const creditReportDropzone = document.querySelector('#credit-report-dropzone');
 const creditReportUploadStatus = document.querySelector('#credit-report-upload-status');
 const openManualReviewButton = document.querySelector('#open-manual-review');
 const clearCurrentReportButton = document.querySelector('#clear-current-report');
+const clearCurrentReportStickyButton = document.querySelector('#clear-current-report-sticky');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const parserCorrectionForm = document.querySelector('#parser-correction-form');
 const approveFinalAnalysisButton = document.querySelector('#approve-final-analysis');
@@ -1796,9 +1798,10 @@ function renderReportMasterReaderLab(report) {
   const confidence = report?.parseConfidence ? `${Math.round(report.parseConfidence.score * 100)}%` : 'Unavailable';
   const ocrStatus = metadata.extractionMode === 'ocr' ? `OCR used (${Math.round((metadata.ocrConfidence || 0) * 100)}%)` : (metadata.directParseConfidence ? 'OCR fallback skipped after direct parse' : 'Not used');
   return `<section class="report-master-grid">
-    <article class="card"><h3>Report Master Reader</h3><dl>${detail('Provider detected', debug.providerDetected || metadata.provider || 'Unknown')}${detail('Extraction method used', metadata.extractionMode || 'Unknown')}${detail('OCR status', ocrStatus)}${detail('Confidence score', confidence)}${detail('Failed fields', failed.length ? failed.join(', ') : 'None detected')}</dl></article>
+    <article class="card parser-failed-fields ${failed.length ? 'has-failures' : 'no-failures'}"><div class="card-topline"><span class="badge warning-badge">Parser review</span></div><h3>Failed Parser Fields</h3><p>${failed.length ? escapeHtml(failed.join(' • ')) : 'No failed fields detected.'}</p></article>
+    <article class="card"><h3>Report Master Reader</h3><dl>${detail('Provider detected', debug.providerDetected || metadata.provider || 'Unknown')}${detail('Extraction method used', metadata.extractionMode || 'Unknown')}${detail('OCR status', ocrStatus)}${detail('Confidence score', confidence)}</dl></article>
     <article class="card"><h3>Parsed Fields</h3><pre>${escapeHtml(renderParsedFields(report))}</pre></article>
-    <article class="card"><h3>Raw Extracted Text Preview</h3><pre>${escapeHtml(rawPreview).slice(0, 5200)}</pre></article>
+    <article class="card raw-preview-card"><h3>Raw Extracted Text Preview</h3><p class="group">Tap the box below to select and copy the extracted text on mobile.</p><textarea class="raw-text-preview" readonly>${escapeHtml(rawPreview).slice(0, 5200)}</textarea></article>
     ${renderParserAccuracyChecklist(report)}
   </section>`;
 }
@@ -1849,7 +1852,7 @@ function renderParserDebug(report) {
   const listValue = (value) => Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : (value || 'None');
   const htmlStructureDebug = report?.metadata?.htmlReportDetected ? `${detail('HTML text length', htmlDebug.htmlTextLength)}${detail('Number of tables', htmlDebug.tableCount)}${detail('Number of rows', htmlDebug.rowCount)}${detail('Number of visible text nodes', htmlDebug.visibleTextNodeCount)}${detail('IdentityIQ markers found', listValue(htmlDebug.identityIqMarkersFound))}${htmlDebug.identityIqMarkerMessage ? detail('IdentityIQ marker warning', htmlDebug.identityIqMarkerMessage) : ''}` : '';
   const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card"><h3>RAW EXTRACTED TEXT PREVIEW</h3><pre>${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.')}</pre></article>` : '';
-  return `<article class="card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}${htmlStructureDebug}</dl></article>${rawPreview}`;
+  return `<article class="card parser-debug-card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}${htmlStructureDebug}</dl></article>${rawPreview}`;
 }
 
 function renderCreditFileIntelligenceDashboard() {
@@ -3628,8 +3631,10 @@ pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.click());
+creditReportUploadNewButton?.addEventListener('click', () => creditReportUpload?.click());
 openManualReviewButton?.addEventListener('click', openManualReviewMode);
 clearCurrentReportButton?.addEventListener('click', clearCurrentCreditReport);
+clearCurrentReportStickyButton?.addEventListener('click', clearCurrentCreditReport);
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 parserCorrectionForm?.addEventListener('submit', storeParserCorrection);
 approveFinalAnalysisButton?.addEventListener('click', approveFinalAnalysis);
