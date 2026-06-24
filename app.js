@@ -190,6 +190,8 @@ const creditReportUpload = document.querySelector('#credit-report-upload');
 const creditReportUploadButton = document.querySelector('#credit-report-upload-button');
 const creditReportDropzone = document.querySelector('#credit-report-dropzone');
 const creditReportUploadStatus = document.querySelector('#credit-report-upload-status');
+const loadDemoReportButton = document.querySelector('#load-demo-report');
+const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const creditFileIntelligenceDashboard = document.querySelector('#credit-file-intelligence-dashboard');
 const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
 const mortgageReadinessList = document.querySelector('#mortgage-readiness-list');
@@ -1046,75 +1048,80 @@ function renderCommunicationCard(item) {
 }
 
 
+const parseUnavailableMessage = 'Report uploaded, but detailed parsing is not available yet. Manual review required.';
+
 const demoCreditFileIntelligence = {
-  fileName: 'Demo tri-bureau credit report.txt', uploadedAt: new Date().toISOString(), isDemo: true,
+  id: 'demo-credit-file-intelligence', fileName: 'Demo tri-bureau credit report.txt', uploadedAt: new Date().toISOString(), isDemo: true, verified: true,
   clientProfile: { name: 'Alicia Johnson', scores: { equifax: 628, experian: 641, transUnion: 636 }, goal: 'Mortgage approval in 90-120 days' },
-  negative: { collections: 3, chargeOffs: 1, repossessions: 0, latePayments: 4, bankruptcies: 0, publicRecords: 0, studentLoans: 2 },
-  positive: { revolving: 4, installment: 2, mortgageHistory: 'No prior mortgage history', autoLoans: 1, authorizedUsers: 1, utilization: '47% aggregate utilization; two cards above 70%', creditMix: 'Solid mix, but revolving balances are suppressing score.' },
+  negative: { collections: 3, chargeOffs: 1, repossessions: 0, latePayments: 4, bankruptcies: 'None reported', publicRecords: 0, studentLoans: 2 },
+  positive: { revolving: 4, installment: 2, mortgageHistory: 'No prior mortgage history', autoLoans: '1 open auto loan', authorizedUsers: 1, utilization: '47% aggregate utilization; two cards above 70%', creditMix: 'Solid mix, but revolving balances are suppressing score.' },
+  notes: 'Demo data only. Do not use for a real client.',
 };
 
-function inferCount(text, patterns) {
-  const lower = (text || '').toLowerCase();
-  return patterns.reduce((count, pattern) => count + (lower.match(new RegExp(pattern, 'g')) || []).length, 0);
-}
-
-function extractScores(text) {
-  const scoreMatches = [...(text || '').matchAll(/\b([3-8][0-9]{2})\b/g)].map((match) => Number(match[1])).filter((score) => score >= 300 && score <= 850);
-  return { equifax: scoreMatches[0] || 620, experian: scoreMatches[1] || scoreMatches[0] || 635, transUnion: scoreMatches[2] || scoreMatches[1] || scoreMatches[0] || 630 };
-}
-
-function buildCreditFileIntelligence(fileName, text = '') {
-  const scores = extractScores(text);
-  const collections = inferCount(text, ['collection', 'collections']);
-  const chargeOffs = inferCount(text, ['charge[ -]?off', 'charged off']);
-  const repossessions = inferCount(text, ['repossession', 'repo']);
-  const latePayments = inferCount(text, ['late payment', '30 days late', '60 days late', '90 days late']);
-  const bankruptcies = inferCount(text, ['bankruptcy', 'chapter 7', 'chapter 13']);
-  const publicRecords = inferCount(text, ['public record', 'judgment', 'lien']);
-  const studentLoans = inferCount(text, ['student loan', 'department of education', 'nelnet', 'aidvantage']);
-  const revolving = Math.max(1, inferCount(text, ['credit card', 'revolving', 'capital one', 'discover', 'visa', 'mastercard']));
-  const installment = Math.max(0, inferCount(text, ['installment', 'personal loan', 'loan account']));
-  const autoLoans = inferCount(text, ['auto loan', 'car loan', 'ally financial', 'santander']);
-  const authorizedUsers = inferCount(text, ['authorized user']);
-  const utilizationMatch = (text || '').match(/(?:utilization|util)\D{0,12}(\d{1,3})%/i);
-  const utilizationNumber = utilizationMatch ? Number(utilizationMatch[1]) : (collections + chargeOffs + latePayments ? 42 : 18);
-  const avg = Math.round(average(Object.values(scores)));
-  const readiness = Math.max(0, Math.min(100, Math.round(35 + (avg - 580) / 4 - collections * 4 - chargeOffs * 6 - repossessions * 8 - latePayments * 4 - bankruptcies * 10 - Math.max(0, utilizationNumber - 30) / 2 + revolving * 2 + installment * 2)));
-  const nameMatch = (text || '').match(/(?:name|consumer|client)\s*:?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/);
-  const goal = avg >= 680 && utilizationNumber <= 30 ? 'Optimize for approvals and stronger rates' : 'Mortgage readiness and score improvement';
+function createUnparsedCreditFileReport(fileName, sourceLength = 0) {
   return {
-    id: crypto.randomUUID(), fileName, uploadedAt: new Date().toISOString(), sourceLength: text.length,
-    clientProfile: { name: nameMatch?.[1] || 'Uploaded Report Client', scores, goal },
-    negative: { collections, chargeOffs, repossessions, latePayments, bankruptcies, publicRecords, studentLoans },
-    positive: {
-      revolving, installment, mortgageHistory: inferCount(text, ['mortgage']) ? 'Mortgage history detected' : 'No mortgage history detected', autoLoans, authorizedUsers,
-      utilization: `${utilizationNumber}% estimated aggregate utilization`,
-      creditMix: revolving && installment ? 'Revolving and installment mix detected.' : 'Credit mix needs more positive depth.',
-    },
-    mortgageReadinessScore: readiness,
+    id: crypto.randomUUID(), fileName, uploadedAt: new Date().toISOString(), sourceLength,
+    verified: false, needsManualReview: true, parseMessage: parseUnavailableMessage,
   };
 }
 
 function getCreditFileIntelligence() {
-  const stored = readStore(CREDIT_FILE_INTELLIGENCE_KEY, null);
-  return stored || { ...demoCreditFileIntelligence, mortgageReadinessScore: 58 };
+  return readStore(CREDIT_FILE_INTELLIGENCE_KEY, null);
+}
+
+function normalizeManualAnalysis(formData) {
+  const get = (field) => (formData.get(field) || '').toString().trim();
+  const num = (field) => get(field) === '' ? '' : asNumber(get(field));
+  return {
+    id: crypto.randomUUID(), fileName: 'Manual Review', uploadedAt: new Date().toISOString(), sourceLength: 0,
+    verified: true, source: 'manual',
+    clientProfile: {
+      name: get('manualClientName') || 'Manual analysis',
+      scores: { equifax: num('manualEqScore'), experian: num('manualExScore'), transUnion: num('manualTuScore') },
+      goal: 'Manual credit file review',
+    },
+    negative: {
+      collections: num('manualCollections'), chargeOffs: num('manualChargeOffs'), repossessions: num('manualRepossessions'),
+      latePayments: num('manualLatePayments'), bankruptcies: get('manualBankruptcy'), publicRecords: '', studentLoans: num('manualStudentLoans'),
+    },
+    positive: {
+      revolving: num('manualOpenRevolving'), installment: num('manualInstallmentAccounts'), mortgageHistory: get('manualMortgageHistory'),
+      autoLoans: get('manualAutoLoan'), authorizedUsers: num('manualAuthorizedUsers'), utilization: get('manualUtilization'),
+      creditMix: 'Based on manually verified account mix.',
+    },
+    notes: get('manualNotes'),
+  };
+}
+
+function calculateManualMortgageReadiness(report) {
+  const scores = Object.values(report.clientProfile.scores || {}).map(asNumber).filter(Boolean);
+  if (!scores.length) return null;
+  const utilizationMatch = String(report.positive.utilization || '').match(/(\d{1,3})/);
+  const utilization = utilizationMatch ? Number(utilizationMatch[1]) : 0;
+  const n = report.negative, p = report.positive;
+  return Math.max(0, Math.min(100, Math.round(
+    40 + (average(scores) - 580) / 4 - asNumber(n.collections) * 4 - asNumber(n.chargeOffs) * 6 -
+    asNumber(n.repossessions) * 8 - asNumber(n.latePayments) * 4 - (String(n.bankruptcies || '').toLowerCase().includes('none') ? 0 : String(n.bankruptcies || '').trim() ? 10 : 0) -
+    Math.max(0, utilization - 30) / 2 + asNumber(p.revolving) * 2 + asNumber(p.installment) * 2
+  )));
 }
 
 function strategyForCreditFile(report) {
+  if (!report?.verified) return { disputes: [], rebuild: [] };
   const n = report.negative;
   const p = report.positive;
   const disputes = [];
-  if (n.collections) disputes.push('Validate every collection for ownership, balance, dates, medical/utility status, and bureau consistency before settlement decisions.');
-  if (n.chargeOffs) disputes.push('Audit charge-offs for inaccurate balance, account status, payment history, and duplicate collection reporting.');
-  if (n.repossessions) disputes.push('Review repossession notices, deficiency balance, sale date, and state compliance details.');
-  if (n.latePayments) disputes.push('Prioritize recent late payments with factual payment-history challenges and goodwill support where appropriate.');
-  if (n.bankruptcies || n.publicRecords) disputes.push('Verify public record identifiers, dates, disposition, and included-account reporting accuracy.');
-  if (n.studentLoans) disputes.push('Separate federal student loan servicing errors from valid reporting and document rehab/consolidation status.');
-  if (!disputes.length) disputes.push('No heavy negative categories detected; dispute only inaccurate, unverifiable, obsolete, or mixed-file items.');
+  if (asNumber(n.collections)) disputes.push('Validate every collection for ownership, balance, dates, medical/utility status, and bureau consistency before settlement decisions.');
+  if (asNumber(n.chargeOffs)) disputes.push('Audit charge-offs for inaccurate balance, account status, payment history, and duplicate collection reporting.');
+  if (asNumber(n.repossessions)) disputes.push('Review repossession notices, deficiency balance, sale date, and state compliance details.');
+  if (asNumber(n.latePayments)) disputes.push('Prioritize recent late payments with factual payment-history challenges and goodwill support where appropriate.');
+  if (String(n.bankruptcies || '').trim() && !String(n.bankruptcies).toLowerCase().includes('none')) disputes.push('Verify bankruptcy identifiers, dates, disposition, and included-account reporting accuracy.');
+  if (asNumber(n.studentLoans)) disputes.push('Separate federal student loan servicing errors from valid reporting and document rehab/consolidation status.');
+  if (!disputes.length) disputes.push('No verified heavy negative categories were entered; dispute only inaccurate, unverifiable, obsolete, or mixed-file items.');
   const rebuild = [
-    p.revolving < 3 ? 'Add or graduate low-fee revolving tradelines and keep balances below 10%.' : 'Maintain existing revolving accounts with one small reporting balance.',
-    p.installment < 1 ? 'Add a credit-builder installment loan if it fits the client budget.' : 'Keep installment loans current and avoid unnecessary new debt.',
-    p.authorizedUsers < 1 ? 'Consider one seasoned authorized-user card with perfect history and low utilization.' : 'Preserve the authorized-user account only if it remains clean and low-utilization.',
+    asNumber(p.revolving) < 3 ? 'Add or graduate low-fee revolving tradelines and keep balances below 10%.' : 'Maintain existing revolving accounts with one small reporting balance.',
+    asNumber(p.installment) < 1 ? 'Add a credit-builder installment loan if it fits the client budget.' : 'Keep installment loans current and avoid unnecessary new debt.',
+    asNumber(p.authorizedUsers) < 1 ? 'Consider one seasoned authorized-user card with perfect history and low utilization.' : 'Preserve the authorized-user account only if it remains clean and low-utilization.',
     'Pause nonessential applications while disputes and utilization optimization are active.',
   ];
   return { disputes, rebuild };
@@ -1123,21 +1130,29 @@ function strategyForCreditFile(report) {
 function renderCreditFileIntelligenceDashboard() {
   if (!creditFileIntelligenceDashboard) return;
   const report = getCreditFileIntelligence();
+  creditFileIntelligenceCount.textContent = report ? (report.isDemo ? 'Demo mode' : report.verified ? 'Manual analysis' : 'Manual review required') : 'No analysis';
+  if (!report) {
+    creditFileIntelligenceDashboard.innerHTML = '<article class="card"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span><p class="group">No verified credit file analysis has been saved yet.</p></article>';
+    return;
+  }
+  if (!report.verified) {
+    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>`;
+    return;
+  }
   const { disputes, rebuild } = strategyForCreditFile(report);
   const n = report.negative, p = report.positive, profile = report.clientProfile;
-  const score = report.mortgageReadinessScore;
-  const updateMessage = `Hi ${profile.name}, your credit file review is complete. Current scores are EQ ${profile.scores.equifax}, EX ${profile.scores.experian}, and TU ${profile.scores.transUnion}. The main priorities are ${disputes[0]} Next we will focus on ${rebuild[0]} Your mortgage readiness score is ${score}/100, so the next 30-90 days should be focused on clean reporting, lower utilization, and stronger positive account depth.`;
+  const score = report.mortgageReadinessScore ?? calculateManualMortgageReadiness(report);
+  const scoreText = score === null ? 'Manual review needed' : `${score}/100`;
+  const updateMessage = `Hi ${profile.name}, your verified credit file review is complete. Current scores are EQ ${profile.scores.equifax || 'not entered'}, EX ${profile.scores.experian || 'not entered'}, and TU ${profile.scores.transUnion || 'not entered'}. The main priorities are ${disputes[0]} Next we will focus on ${rebuild[0]} Mortgage readiness is ${scoreText}.`;
   const list = (items) => `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
-  creditFileIntelligenceCount.textContent = report.isDemo ? 'Demo mode' : '1 uploaded report';
   creditFileIntelligenceDashboard.innerHTML = `
-    <section class="intel-hero card"><div><p class="eyebrow">Client profile</p><h3>${escapeHtml(profile.name)}</h3><p>${escapeHtml(profile.goal)}</p></div><div class="score-stack"><span>EQ ${profile.scores.equifax}</span><span>EX ${profile.scores.experian}</span><span>TU ${profile.scores.transUnion}</span></div></section>
-    <div class="metrics-grid"><article class="metric-card"><span>Mortgage Readiness Score</span><strong>${score}/100</strong></article><article class="metric-card"><span>Negative Categories</span><strong>${Object.values(n).filter(Boolean).length}</strong></article><article class="metric-card"><span>Positive Tradelines</span><strong>${asNumber(p.revolving)+asNumber(p.installment)+asNumber(p.autoLoans)+asNumber(p.authorizedUsers)}</strong></article></div>
+    <section class="intel-hero card"><div><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span>${report.isDemo ? '<span class="badge">Demo data</span>' : '<span class="badge success-badge">Verified data</span>'}</div><p class="eyebrow">Client profile</p><h3>${escapeHtml(profile.name)}</h3><p>${escapeHtml(profile.goal)}</p></div><div class="score-stack"><span>EQ ${escapeHtml(profile.scores.equifax || '—')}</span><span>EX ${escapeHtml(profile.scores.experian || '—')}</span><span>TU ${escapeHtml(profile.scores.transUnion || '—')}</span></div></section>
+    <div class="metrics-grid"><article class="metric-card"><span>Mortgage Readiness Score</span><strong>${escapeHtml(scoreText)}</strong></article><article class="metric-card"><span>Negative Categories</span><strong>${Object.values(n).filter(Boolean).length}</strong></article><article class="metric-card"><span>Positive Tradelines</span><strong>${asNumber(p.revolving)+asNumber(p.installment)+asNumber(p.authorizedUsers)}</strong></article></div>
     <div class="intelligence-grid">
-      <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Bankruptcies', n.bankruptcies)}${detail('Public records', n.publicRecords)}${detail('Student loans', n.studentLoans)}</dl></article>
-      <article class="card"><h3>Positive Credit Line Intelligence</h3><dl>${detail('Open revolving accounts', p.revolving)}${detail('Installment accounts', p.installment)}${detail('Mortgage history', p.mortgageHistory)}${detail('Auto loans', p.autoLoans)}${detail('Authorized users', p.authorizedUsers)}${detail('Utilization analysis', p.utilization)}${detail('Credit mix analysis', p.creditMix)}</dl></article>
+      <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Bankruptcy', n.bankruptcies)}${detail('Student loans', n.studentLoans)}</dl></article>
+      <article class="card"><h3>Positive Credit Line Intelligence</h3><dl>${detail('Open revolving accounts', p.revolving)}${detail('Installment accounts', p.installment)}${detail('Mortgage history', p.mortgageHistory)}${detail('Auto loan', p.autoLoans)}${detail('Authorized users', p.authorizedUsers)}${detail('Utilization analysis', p.utilization)}${detail('Notes', report.notes)}</dl></article>
       <article class="card"><h3>Recommended Dispute Strategy</h3>${list(disputes)}</article>
       <article class="card"><h3>Recommended Rebuild Strategy</h3>${list(rebuild)}</article>
-      <article class="card"><h3>Action Plan</h3><dl>${detail('30 day plan', 'Collect proof, verify personal information, send first factual disputes, and reduce utilization below 30%.')}${detail('60 day plan', 'Review bureau responses, escalate unverifiable items, add positive credit only if needed, and target utilization under 10%.')}${detail('90 day plan', 'Prepare lender-readiness review, refresh scores, confirm no new lates, and finalize approval documentation.')}</dl></article>
       <article class="card"><h3>Client Update Message Generator</h3><textarea readonly>${escapeHtml(updateMessage)}</textarea></article>
     </div>
     <p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p>`;
@@ -1147,16 +1162,30 @@ function handleCreditReportFile(file) {
   if (!file) return;
   const valid = ['application/pdf', 'text/plain'].includes(file.type) || /\.(pdf|txt)$/i.test(file.name);
   if (!valid) { creditReportUploadStatus.textContent = 'Please upload a PDF or TXT credit report.'; return; }
-  creditReportUploadStatus.textContent = `Analyzing ${file.name}...`;
   const reader = new FileReader();
   reader.onload = () => {
-    const text = file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? file.name : String(reader.result || '');
-    const report = buildCreditFileIntelligence(file.name, text);
+    const text = file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? '' : String(reader.result || '');
+    const report = createUnparsedCreditFileReport(file.name, text.length);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-    creditReportUploadStatus.textContent = `${file.name} uploaded and analyzed. Dashboard updated.`;
+    creditReportUploadStatus.textContent = parseUnavailableMessage;
     renderCreditFileIntelligenceDashboard();
   };
+  creditReportUploadStatus.textContent = `Uploading ${file.name}...`;
   reader.readAsText(file);
+}
+
+function saveManualCreditAnalysis(event) {
+  event.preventDefault();
+  const report = normalizeManualAnalysis(new FormData(manualCreditAnalysisForm));
+  writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
+  creditReportUploadStatus.textContent = 'Manual analysis saved. Strategies now use verified manual data.';
+  renderCreditFileIntelligenceDashboard();
+}
+
+function loadDemoCreditFileReport() {
+  writeStore(CREDIT_FILE_INTELLIGENCE_KEY, { ...demoCreditFileIntelligence, id: crypto.randomUUID(), uploadedAt: new Date().toISOString() });
+  creditReportUploadStatus.textContent = 'Demo report loaded. Demo values are not client data.';
+  renderCreditFileIntelligenceDashboard();
 }
 
 function getCreditIntelligenceFormData() {
@@ -2838,6 +2867,8 @@ pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.click());
+loadDemoReportButton?.addEventListener('click', loadDemoCreditFileReport);
+manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 creditReportUpload?.addEventListener('change', (event) => handleCreditReportFile(event.target.files[0]));
 creditReportDropzone?.addEventListener('dragover', (event) => { event.preventDefault(); creditReportDropzone.classList.add('drag-over'); });
 creditReportDropzone?.addEventListener('dragleave', () => creditReportDropzone.classList.remove('drag-over'));

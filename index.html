@@ -412,9 +412,9 @@
           <div>
             <p class="eyebrow">Credit report analysis</p>
             <h2 id="credit-file-intelligence-heading">Credit File Intelligence Center</h2>
-            <p>Upload a PDF or TXT credit report to generate a stored intelligence dashboard with dispute, rebuild, mortgage, and client update recommendations.</p>
+            <p>Upload a PDF or TXT credit report for verified analysis, or enter reviewed details manually before generating dispute, rebuild, mortgage, and client update recommendations.</p>
           </div>
-          <span id="credit-file-intelligence-count" class="count-pill">Demo mode</span>
+          <span id="credit-file-intelligence-count" class="count-pill">No analysis</span>
         </div>
 
         <section class="upload-console" aria-labelledby="credit-upload-heading">
@@ -428,9 +428,40 @@
             <span>PDF and TXT files supported</span>
             <input id="credit-report-upload" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
             <button id="credit-report-upload-button" class="primary" type="button">Upload Report</button>
+            <button id="load-demo-report" class="secondary" type="button">Load Demo Report</button>
           </div>
-          <div id="credit-report-upload-status" class="upload-status" aria-live="polite">No report uploaded yet. Showing demo intelligence.</div>
+          <div id="credit-report-upload-status" class="upload-status" aria-live="polite">No report uploaded yet. Upload a report, enter manual review details, or load demo data.</div>
         </section>
+
+        <form id="manual-credit-analysis-form" class="tracker-form manual-review-form" aria-labelledby="manual-credit-analysis-heading">
+          <div>
+            <p class="eyebrow">Manual review mode</p>
+            <h3 id="manual-credit-analysis-heading">Verified Credit File Analysis</h3>
+            <p class="group">Use these fields only after reviewing the uploaded report or client-provided documents. Saved manual data is treated as verified for strategy generation.</p>
+          </div>
+          <div class="form-grid">
+            <label>Client name<input id="manualClientName" name="manualClientName" /></label>
+            <label>EQ score<input id="manualEqScore" name="manualEqScore" type="number" min="300" max="850" /></label>
+            <label>EX score<input id="manualExScore" name="manualExScore" type="number" min="300" max="850" /></label>
+            <label>TU score<input id="manualTuScore" name="manualTuScore" type="number" min="300" max="850" /></label>
+            <label>Collections<input id="manualCollections" name="manualCollections" type="number" min="0" /></label>
+            <label>Charge-offs<input id="manualChargeOffs" name="manualChargeOffs" type="number" min="0" /></label>
+            <label>Repossessions<input id="manualRepossessions" name="manualRepossessions" type="number" min="0" /></label>
+            <label>Late payments<input id="manualLatePayments" name="manualLatePayments" type="number" min="0" /></label>
+            <label>Bankruptcy<input id="manualBankruptcy" name="manualBankruptcy" /></label>
+            <label>Student loans<input id="manualStudentLoans" name="manualStudentLoans" type="number" min="0" /></label>
+            <label>Utilization<input id="manualUtilization" name="manualUtilization" placeholder="e.g. 24% aggregate" /></label>
+            <label>Open revolving accounts<input id="manualOpenRevolving" name="manualOpenRevolving" type="number" min="0" /></label>
+            <label>Installment accounts<input id="manualInstallmentAccounts" name="manualInstallmentAccounts" type="number" min="0" /></label>
+            <label>Auto loan<input id="manualAutoLoan" name="manualAutoLoan" /></label>
+            <label>Mortgage history<input id="manualMortgageHistory" name="manualMortgageHistory" /></label>
+            <label>Authorized users<input id="manualAuthorizedUsers" name="manualAuthorizedUsers" type="number" min="0" /></label>
+          </div>
+          <label>Notes<textarea id="manualNotes" name="manualNotes"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Manual Analysis</button>
+          </div>
+        </form>
 
         <div id="credit-file-intelligence-dashboard" class="credit-intel-dashboard" aria-live="polite"></div>
       </section>
