@@ -28,6 +28,7 @@
       <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
       <button class="tab" type="button" data-tab="team">Team</button>
       <button class="tab" type="button" data-tab="content">Content</button>
+      <button class="tab" type="button" data-tab="automations">Automations</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -752,6 +753,56 @@
 
         <div id="content-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
+
+      <section id="automations" class="panel" aria-labelledby="automations-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Automation command</p>
+            <h2 id="automations-heading">Automations</h2>
+          </div>
+          <span id="automation-count" class="count-pill">0 automations</span>
+        </div>
+
+        <div class="metrics-grid automation-metrics" aria-label="Automation dashboard metrics">
+          <article class="metric-card"><span>Active Automations</span><strong id="metric-automation-active">0</strong></article>
+          <article class="metric-card"><span>Due Today</span><strong id="metric-automation-due-today">0</strong></article>
+          <article class="metric-card overdue-metric"><span>Overdue</span><strong id="metric-automation-overdue">0</strong></article>
+          <article class="metric-card"><span>Completed This Month</span><strong id="metric-automation-completed-month">0</strong></article>
+        </div>
+
+        <form id="automation-form" class="tracker-form automation-form">
+          <input type="hidden" id="automation-id" />
+          <div class="form-grid">
+            <label>Automation Name<input id="automationName" name="automationName" placeholder="Weekly credit repair cycle check-in" required /></label>
+            <label>Category<select id="automationCategory" name="automationCategory"></select></label>
+            <label>Assigned Team Member<input id="automationAssignedTeamMember" name="automationAssignedTeamMember" placeholder="Team member" /></label>
+            <label>Trigger Date<input id="automationTriggerDate" name="automationTriggerDate" type="date" /></label>
+            <label>Frequency<select id="automationFrequency" name="automationFrequency"></select></label>
+            <label>Last Completed<input id="automationLastCompleted" name="automationLastCompleted" type="date" /></label>
+            <label>Next Due Date<input id="automationNextDueDate" name="automationNextDueDate" type="date" required /></label>
+            <label>Status<select id="automationStatus" name="automationStatus"></select></label>
+            <label>Priority<select id="automationPriority" name="automationPriority"></select></label>
+          </div>
+          <label>Description<textarea id="automationDescription" name="automationDescription" placeholder="Workflow steps, trigger logic, target audience, tools used"></textarea></label>
+          <label>Notes<textarea id="automationNotes" name="automationNotes" placeholder="Recent outcomes, exceptions, links, owner notes"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Automation</button>
+            <button id="reset-automation-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel automation-controls">
+          <label>Search Automations<input id="automation-search" placeholder="Search name, category, team member, description, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Category<select id="automation-category-filter"><option value="">All categories</option></select></label>
+            <label>Filter by Status<select id="automation-status-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Priority<select id="automation-priority-filter"><option value="">All priorities</option></select></label>
+          </div>
+        </div>
+
+        <div id="automation-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
+
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
         <div class="section-header">

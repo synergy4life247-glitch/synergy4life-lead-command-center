@@ -592,3 +592,18 @@ button:disabled {
 @media (min-width: 720px) {
   .content-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+.automation-metrics .metric-card { min-height: 88px; }
+.automation-controls { position: sticky; top: 0; z-index: 2; }
+.automation-card .card-topline { align-items: center; }
+.automation-card dl { grid-template-columns: 1fr; }
+.automation-overdue {
+  border-color: #fca5a5;
+  background: linear-gradient(145deg, #ffffff, #fff7f7);
+}
+.priority-critical { background: #fee2e2; color: var(--danger); }
+.priority-medium { background: #e0ecff; color: #1e40af; }
+
+@media (min-width: 720px) {
+  .automation-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
