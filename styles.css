@@ -187,3 +187,44 @@ dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
   .credit-section-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .credit-section-grid label:last-child { grid-column: auto; }
 }
+
+.task-metrics .metric-card { min-height: 88px; }
+.overdue-metric {
+  border-color: #fecaca;
+  background: linear-gradient(145deg, #fff, #fff1f2);
+}
+.overdue-metric strong,
+.urgent-metric strong { color: var(--danger); }
+.task-controls { position: sticky; top: 0; z-index: 2; }
+.overdue-task-list {
+  margin-bottom: 1rem;
+  padding: .85rem;
+  border: 1px solid #fecaca;
+  border-radius: 1.1rem;
+  background: #fff7f7;
+}
+.overdue-task-list:empty {
+  display: none;
+}
+.overdue-heading {
+  grid-column: 1 / -1;
+  margin: 0 0 .25rem;
+  color: var(--danger);
+  font-size: 1rem;
+}
+.task-card .card-topline { align-items: center; }
+.task-overdue {
+  border-color: #fca5a5;
+  box-shadow: 0 14px 35px rgba(220, 38, 38, .14);
+}
+.priority-high { background: #ffedd5; color: #9a3412; }
+.priority-urgent { background: #fee2e2; color: var(--danger); }
+.priority-low { background: #dcfce7; color: #166534; }
+button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+@media (min-width: 720px) {
+  .task-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

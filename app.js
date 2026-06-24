@@ -4,6 +4,7 @@ const CLIENTS_KEY = 'synergy4life.clients';
 const PIPELINE_KEY = 'synergy4life.pipeline';
 const PIPELINE_DELETED_KEY = 'synergy4life.pipeline.deletedSourceLeads';
 const CREDIT_FILES_KEY = 'synergy4life.creditFiles';
+const TASKS_KEY = 'synergy4life.tasks';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -29,6 +30,11 @@ const creditFileFields = [
   'chargeOffs', 'repossessions', 'bankruptcy', 'disputeRoundNotes'
 ];
 const pipelineFields = ['pipelineName', 'pipelinePhone', 'pipelineEmail', 'pipelineSource', 'pipelineStage', 'pipelineValue', 'pipelineNotes'];
+const taskFields = ['taskTitle', 'taskPerson', 'taskSource', 'taskType', 'taskDueDate', 'taskPriority', 'taskStatus', 'taskNotes'];
+const taskSourceOptions = ['Leads', 'Clients', 'Group Conversations', 'Pipeline Items', 'Credit Files'];
+const taskTypeOptions = ['Call', 'Text', 'Email', 'Follow-Up', 'Dispute Round', 'Credit File Review', 'Mortgage Check-In', 'Real Estate Follow-Up', 'Skool Follow-Up', 'Payment Follow-Up'];
+const taskPriorityOptions = ['Low', 'Medium', 'High', 'Urgent'];
+const taskStatusOptions = ['Pending', 'Completed', 'Overdue'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -56,11 +62,21 @@ const creditGoalFilter = document.querySelector('#credit-goal-filter');
 const creditStatusFilter = document.querySelector('#credit-status-filter');
 const creditStageFilter = document.querySelector('#credit-stage-filter');
 const creditMortgageFilter = document.querySelector('#credit-mortgage-filter');
+const taskForm = document.querySelector('#task-form');
+const taskList = document.querySelector('#task-list');
+const overdueTaskList = document.querySelector('#overdue-task-list');
+const taskCount = document.querySelector('#task-count');
+const taskSearch = document.querySelector('#task-search');
+const taskStatusFilter = document.querySelector('#task-status-filter');
+const taskPriorityFilter = document.querySelector('#task-priority-filter');
+const taskSourceFilter = document.querySelector('#task-source-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 const formatDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString() : 'Not set';
 const formatCurrency = (value) => Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+const todayDateString = () => new Date().toISOString().slice(0, 10);
+const isTaskOverdue = (task) => task.taskStatus !== 'Completed' && task.taskDueDate && task.taskDueDate < todayDateString();
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 })[char]);
@@ -70,6 +86,121 @@ function seedSelect(select, values, allLabel = '') {
   select.innerHTML = (allLabel ? `<option value="">${allLabel}</option>` : '') + values
     .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
     .join('');
+}
+
+
+function getTaskFormData() {
+  return taskFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function normalizeTask(task) {
+  return {
+    ...task,
+    taskStatus: isTaskOverdue(task) ? 'Overdue' : (task.taskStatus || 'Pending'),
+  };
+}
+
+function getTasks() {
+  const tasks = readStore(TASKS_KEY).map(normalizeTask);
+  writeStore(TASKS_KEY, tasks);
+  return tasks;
+}
+
+function resetTaskForm() {
+  taskForm.reset();
+  document.querySelector('#task-id').value = '';
+  document.querySelector('#taskSource').value = 'Leads';
+  document.querySelector('#taskType').value = 'Follow-Up';
+  document.querySelector('#taskPriority').value = 'Medium';
+  document.querySelector('#taskStatus').value = 'Pending';
+}
+
+function saveTask(event) {
+  event.preventDefault();
+  const tasks = getTasks();
+  const id = document.querySelector('#task-id').value || crypto.randomUUID();
+  const existing = tasks.findIndex((task) => task.id === id);
+  const record = normalizeTask({
+    id,
+    ...getTaskFormData(),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? tasks[existing].createdAt : new Date().toISOString(),
+  });
+  if (existing >= 0) tasks[existing] = record;
+  else tasks.unshift(record);
+  writeStore(TASKS_KEY, tasks);
+  resetTaskForm();
+  render();
+}
+
+function editTask(id) {
+  const task = getTasks().find((item) => item.id === id);
+  if (!task) return;
+  document.querySelector('#task-id').value = task.id;
+  taskFields.forEach((field) => {
+    document.querySelector(`#${field}`).value = task[field] || '';
+  });
+  document.querySelector('[data-tab="tasks"]').click();
+  taskForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteTask(id) {
+  writeStore(TASKS_KEY, getTasks().filter((item) => item.id !== id));
+  render();
+}
+
+function markTaskComplete(id) {
+  const tasks = getTasks().map((task) => task.id === id ? { ...task, taskStatus: 'Completed', updatedAt: new Date().toISOString() } : task);
+  writeStore(TASKS_KEY, tasks);
+  render();
+}
+
+function getFilteredTasks(tasks) {
+  const query = taskSearch.value.trim().toLowerCase();
+  return tasks.filter((task) => {
+    const searchable = [task.taskTitle, task.taskPerson, task.taskSource, task.taskType, task.taskNotes].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!taskStatusFilter.value || task.taskStatus === taskStatusFilter.value)
+      && (!taskPriorityFilter.value || task.taskPriority === taskPriorityFilter.value)
+      && (!taskSourceFilter.value || task.taskSource === taskSourceFilter.value);
+  });
+}
+
+function renderTaskMetrics(tasks) {
+  const today = todayDateString();
+  document.querySelector('#metric-tasks-today').textContent = tasks.filter((task) => task.taskDueDate === today && task.taskStatus !== 'Completed').length;
+  document.querySelector('#metric-tasks-overdue').textContent = tasks.filter((task) => task.taskStatus === 'Overdue').length;
+  document.querySelector('#metric-tasks-completed').textContent = tasks.filter((task) => task.taskStatus === 'Completed').length;
+  document.querySelector('#metric-tasks-urgent').textContent = tasks.filter((task) => task.taskPriority === 'Urgent' && task.taskStatus !== 'Completed').length;
+}
+
+function renderTaskCard(task) {
+  const card = document.createElement('article');
+  card.className = `card task-card ${task.taskStatus === 'Overdue' ? 'task-overdue' : ''}`;
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge">${escapeHtml(task.taskStatus || 'Pending')}</span>
+      <span class="badge priority-${escapeHtml((task.taskPriority || 'medium').toLowerCase())}">${escapeHtml(task.taskPriority || 'Medium')}</span>
+      <span class="badge">${escapeHtml(task.taskSource || 'Source')}</span>
+    </div>
+    <h3>${escapeHtml(task.taskTitle || 'Untitled task')}</h3>
+    <p class="group">${escapeHtml(task.taskPerson || 'No associated person')} • ${escapeHtml(task.taskType || 'Follow-Up')}</p>
+    <dl>
+      ${detail('Due Date', formatDate(task.taskDueDate))}
+      ${detail('Notes', task.taskNotes)}
+    </dl>
+    <div class="card-actions">
+      <button class="complete primary" type="button" ${task.taskStatus === 'Completed' ? 'disabled' : ''}>Mark Complete</button>
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.querySelector('.complete').addEventListener('click', () => markTaskComplete(task.id));
+  card.querySelector('.edit').addEventListener('click', () => editTask(task.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteTask(task.id));
+  return card;
 }
 
 function getPipelineFormData() {
@@ -588,19 +719,24 @@ function render() {
   const clients = readStore(CLIENTS_KEY);
   const pipelineLeads = getPipelineLeads();
   const creditFiles = readStore(CREDIT_FILES_KEY);
+  const tasks = getTasks();
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
   pipelineCount.textContent = `${pipelineLeads.length} lead${pipelineLeads.length === 1 ? '' : 's'}`;
   creditFileCount.textContent = `${creditFiles.length} file${creditFiles.length === 1 ? '' : 's'}`;
+  taskCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
   renderCreditFileMetrics(creditFiles);
+  renderTaskMetrics(tasks);
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
   creditFileList.innerHTML = '';
+  taskList.innerHTML = '';
+  overdueTaskList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!conversations.length) conversationList.innerHTML = '<p class="empty-message">No group conversations yet. Add your first tracked reply above.</p>';
@@ -612,6 +748,15 @@ function render() {
   const filteredClients = getFilteredClients(clients);
   if (!filteredClients.length) clientList.innerHTML = '<p class="empty-message">No clients match your current view. Add a client or adjust your filters.</p>';
   filteredClients.forEach((client) => clientList.append(renderClientCard(client)));
+
+  const filteredTasks = getFilteredTasks(tasks);
+  const overdueTasks = filteredTasks.filter((task) => task.taskStatus === 'Overdue');
+  if (overdueTasks.length) {
+    overdueTaskList.innerHTML = '<h3 class="overdue-heading">Overdue tasks need attention</h3>';
+    overdueTasks.forEach((task) => overdueTaskList.append(renderTaskCard(task)));
+  }
+  if (!filteredTasks.length) taskList.innerHTML = '<p class="empty-message">No tasks match your current view. Add a task or adjust your filters.</p>';
+  filteredTasks.filter((task) => task.taskStatus !== 'Overdue').forEach((task) => taskList.append(renderTaskCard(task)));
 
   const filteredCreditFiles = getFilteredCreditFiles(creditFiles);
   if (!filteredCreditFiles.length) creditFileList.innerHTML = '<p class="empty-message">No credit files match your current view. Add a credit repair client or adjust your filters.</p>';
@@ -631,20 +776,31 @@ seedSelect(pipelineStageFilter, pipelineStages, 'All stages');
 seedSelect(creditGoalFilter, creditGoalOptions, 'All goals');
 seedSelect(creditStatusFilter, creditStatusOptions, 'All statuses');
 seedSelect(creditStageFilter, disputeStageOptions, 'All stages');
+seedSelect(document.querySelector('#taskSource'), taskSourceOptions);
+seedSelect(document.querySelector('#taskType'), taskTypeOptions);
+seedSelect(document.querySelector('#taskPriority'), taskPriorityOptions);
+seedSelect(document.querySelector('#taskStatus'), taskStatusOptions);
+seedSelect(taskStatusFilter, taskStatusOptions, 'All statuses');
+seedSelect(taskPriorityFilter, taskPriorityOptions, 'All priorities');
+seedSelect(taskSourceFilter, taskSourceOptions, 'All source modules');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
 pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
+taskForm.addEventListener('submit', saveTask);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
+document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
 clientSearch.addEventListener('input', render);
 pipelineSearch.addEventListener('input', render);
 pipelineSourceFilter.addEventListener('input', render);
 pipelineStageFilter.addEventListener('change', render);
 creditFileSearch.addEventListener('input', render);
+taskSearch.addEventListener('input', render);
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
+[taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 render();

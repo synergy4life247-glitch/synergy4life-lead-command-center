@@ -19,6 +19,7 @@
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+      <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -244,6 +245,61 @@
         </div>
 
         <div id="credit-file-list" class="card-grid empty-state"></div>
+      </section>
+
+      <section id="tasks" class="panel" aria-labelledby="tasks-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Follow-up command</p>
+            <h2 id="tasks-heading">Task &amp; Follow-Up Center</h2>
+          </div>
+          <span id="task-count" class="count-pill">0 tasks</span>
+        </div>
+
+        <div class="metrics-grid task-metrics" aria-label="Task dashboard metrics">
+          <article class="metric-card"><span>Tasks Due Today</span><strong id="metric-tasks-today">0</strong></article>
+          <article class="metric-card overdue-metric"><span>Overdue Tasks</span><strong id="metric-tasks-overdue">0</strong></article>
+          <article class="metric-card"><span>Completed Tasks</span><strong id="metric-tasks-completed">0</strong></article>
+          <article class="metric-card urgent-metric"><span>Urgent Tasks</span><strong id="metric-tasks-urgent">0</strong></article>
+        </div>
+
+        <form id="task-form" class="tracker-form">
+          <input type="hidden" id="task-id" />
+          <div class="form-grid">
+            <label>Task Title<input id="taskTitle" name="taskTitle" placeholder="Call Jane about documents" required /></label>
+            <label>Associated Person<input id="taskPerson" name="taskPerson" placeholder="Jane Smith" required /></label>
+            <label>Source Module
+              <select id="taskSource" name="taskSource"></select>
+            </label>
+            <label>Task Type
+              <select id="taskType" name="taskType"></select>
+            </label>
+            <label>Due Date<input id="taskDueDate" name="taskDueDate" type="date" required /></label>
+            <label>Priority
+              <select id="taskPriority" name="taskPriority"></select>
+            </label>
+            <label>Status
+              <select id="taskStatus" name="taskStatus"></select>
+            </label>
+          </div>
+          <label>Notes<textarea id="taskNotes" name="taskNotes" placeholder="Context, script, links, promised next step"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Task</button>
+            <button id="reset-task-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel task-controls">
+          <label>Search Tasks<input id="task-search" placeholder="Search title, person, type, source, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Status<select id="task-status-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Priority<select id="task-priority-filter"><option value="">All priorities</option></select></label>
+            <label>Filter by Source Module<select id="task-source-filter"><option value="">All source modules</option></select></label>
+          </div>
+        </div>
+
+        <div id="overdue-task-list" class="card-grid overdue-task-list" aria-live="polite"></div>
+        <div id="task-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
