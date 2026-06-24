@@ -1051,3 +1051,194 @@ button:disabled {
 @media (min-width: 860px) {
   .report-master-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Mobile responsiveness hardening */
+html,
+body {
+  max-width: 100%;
+}
+
+main,
+.panel,
+.dashboard-widget,
+.card,
+.tracker-form,
+.filter-panel,
+.upload-console,
+.credit-intel-dashboard,
+.intelligence-grid,
+.report-master-grid,
+.metrics-grid,
+.card-grid,
+.form-grid {
+  min-width: 0;
+}
+
+.card,
+.metric-card,
+.dashboard-widget,
+.upload-console,
+.drop-zone,
+.upload-status-panel {
+  overflow-wrap: anywhere;
+}
+
+.credit-file-sticky-controls {
+  position: sticky;
+  bottom: .75rem;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  grid-column: 1 / -1;
+  padding: .65rem;
+  border: 1px solid rgba(37, 99, 235, .22);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .16);
+  backdrop-filter: blur(12px);
+}
+
+.parser-failed-fields {
+  grid-column: 1 / -1;
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.parser-failed-fields.no-failures {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+.parser-failed-fields p {
+  margin-bottom: 0;
+  color: #92400e;
+  font-weight: 900;
+  line-height: 1.5;
+}
+.parser-failed-fields.no-failures p { color: #166534; }
+
+.raw-preview-card {
+  grid-column: 1 / -1;
+}
+.raw-text-preview {
+  min-height: 320px;
+  max-height: 58vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .84rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+  background: #0f172a;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.parser-debug-card dl {
+  gap: .6rem;
+}
+.parser-debug-card dl > div {
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: .8rem;
+  background: #f8fbff;
+}
+
+@media (max-width: 640px) {
+  body { width: 100%; }
+  .workspace-nav {
+    position: static;
+    padding: .7rem;
+  }
+  .nav-home,
+  .nav-groups,
+  .nav-group,
+  .nav-links {
+    width: 100%;
+  }
+  .nav-home { display: grid; }
+  .nav-groups {
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+  .nav-links {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .tab {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+  main {
+    width: 100%;
+    padding: .7rem;
+  }
+  .dashboard-hero,
+  .section-header,
+  .dashboard-widget-header,
+  .intel-hero,
+  .score-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .quick-actions,
+  .metrics-grid,
+  .dashboard-sections,
+  .intelligence-grid,
+  .report-master-grid,
+  .card-grid,
+  .form-grid,
+  .form-actions,
+  .card-actions,
+  .credit-file-sticky-controls {
+    grid-template-columns: 1fr;
+  }
+  .quick-actions button:last-child,
+  .dashboard-widget.wide-widget,
+  .raw-preview-card,
+  .account-table-card {
+    grid-column: auto;
+  }
+  .dashboard-widget,
+  .tracker-form,
+  .filter-panel,
+  .card,
+  .metric-card,
+  .upload-console {
+    padding: .85rem;
+  }
+  .table-scroll {
+    overflow-x: visible;
+  }
+  .table-scroll table,
+  .table-scroll thead,
+  .table-scroll tbody,
+  .table-scroll tr,
+  .table-scroll th,
+  .table-scroll td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .table-scroll thead { display: none; }
+  .table-scroll tr {
+    margin-bottom: .85rem;
+    border: 1px solid var(--line);
+    border-radius: .85rem;
+    background: #fff;
+    overflow: hidden;
+  }
+  .table-scroll td {
+    padding: .7rem;
+  }
+  .report-master-grid pre,
+  .intelligence-grid pre,
+  .raw-text-preview {
+    max-height: 50vh;
+    font-size: .78rem;
+  }
+}
