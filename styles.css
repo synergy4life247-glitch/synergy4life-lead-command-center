@@ -1004,3 +1004,9 @@ button:disabled {
   .upload-status { grid-column: 1 / -1; }
   .intelligence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.account-table-card { grid-column: 1 / -1; }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { width: 100%; border-collapse: collapse; min-width: 860px; }
+.table-scroll th, .table-scroll td { border-bottom: 1px solid var(--line); padding: .65rem; text-align: left; vertical-align: top; }
+.table-scroll th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }

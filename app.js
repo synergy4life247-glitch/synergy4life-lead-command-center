@@ -8,6 +8,7 @@ const TASKS_KEY = 'synergy4life.tasks';
 const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 const CREDIT_FILE_INTELLIGENCE_KEY = 'synergy4life.creditFileIntelligence';
+const MANUAL_REVIEW_QUEUE_KEY = 'synergy4life.manualReviewQueue';
 const DASHBOARD_KEY = 'synergy4life.dashboard';
 const DOCUMENTS_KEY = 'synergy4life.documents';
 const COMMUNICATIONS_KEY = 'synergy4life.communications';
@@ -1048,7 +1049,7 @@ function renderCommunicationCard(item) {
 }
 
 
-const parseUnavailableMessage = 'Report uploaded successfully. Manual review required.';
+const parseUnavailableMessage = 'Report uploaded successfully. Manual review required because extraction confidence was low.';
 const uploadStatuses = {
   none: 'No report uploaded',
   processing: 'Processing report',
@@ -1067,6 +1068,29 @@ function createUnparsedCreditFileReport(fileName, sourceLength = 0) {
 
 function getCreditFileIntelligence() {
   return readStore(CREDIT_FILE_INTELLIGENCE_KEY, null);
+}
+
+function enqueueManualReview(report) {
+  const queue = readStore(MANUAL_REVIEW_QUEUE_KEY);
+  const item = { ...report, queuedAt: new Date().toISOString(), queueStatus: 'Manual Review Queue' };
+  writeStore(MANUAL_REVIEW_QUEUE_KEY, [item, ...queue.filter((queued) => queued.id !== report.id)]);
+}
+
+async function readCreditReportFile(file) {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    const pdfjs = window.pdfjsLib || await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfjs.GlobalWorkerOptions.workerSrc || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data }).promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => item.str).join(' '));
+    }
+    return pages.join('\n');
+  }
+  return file.text();
 }
 
 function setCreditUploadStatus(status) {
@@ -1093,62 +1117,155 @@ function extractNumber(text, patterns) {
   return value === '' ? '' : asNumber(value.replace(/,/g, ''));
 }
 
+function normalizeCreditReportText(text) {
+  return String(text || '')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function confidenceValue(value) {
+  if (Array.isArray(value)) return value.length ? 1 : 0;
+  if (value && typeof value === 'object') return Object.values(value).some((item) => confidenceValue(item)) ? 1 : 0;
+  return value !== '' && value !== null && value !== undefined ? 1 : 0;
+}
+
+function buildParseConfidence(report) {
+  const checks = [
+    confidenceValue(report.clientProfile.name),
+    ...Object.values(report.clientProfile.scores || {}).map(confidenceValue),
+    confidenceValue(report.accounts),
+    confidenceValue(report.negative.collections),
+    confidenceValue(report.negative.chargeOffs),
+    confidenceValue(report.negative.repossessions),
+    confidenceValue(report.negative.latePayments),
+    confidenceValue(report.positive.utilization),
+    confidenceValue(report.bureauReportingDifferences),
+  ];
+  const score = checks.reduce((sum, value) => sum + value, 0) / checks.length;
+  const reasons = [];
+  if (!report.clientProfile.name) reasons.push('client name not found');
+  if (!Object.values(report.clientProfile.scores || {}).some(Boolean)) reasons.push('bureau scores not found');
+  if (!report.accounts.length) reasons.push('account rows not found');
+  if (score < 0.62) reasons.push('required fields below confidence threshold');
+  return { score: Math.round(score * 100) / 100, low: score < 0.62, reasons };
+}
+
+function extractScore(normalized, bureau) {
+  const aliases = {
+    equifax: '(?:equifax|eq)',
+    experian: '(?:experian|ex)',
+    transUnion: '(?:transunion|trans union|tu)',
+  }[bureau];
+  return extractNumber(normalized, [
+    new RegExp(`${aliases}[^0-9]{0,40}(?:score|fico|credit score)?[^0-9]{0,20}(\\d{3})`, 'i'),
+    new RegExp(`(?:score|fico)[^\\n]{0,40}${aliases}[^0-9]{0,20}(\\d{3})`, 'i'),
+  ]);
+}
+
+function extractClientName(normalized) {
+  const label = extractFirstMatch(normalized, [
+    /(?:client|consumer|borrower|customer|member)\s*(?:name)?\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,70})(?=\s{2,}|\n|\b(?:date|address|ssn|dob|report)\b)/i,
+    /(?:prepared for|report for)\s+([A-Z][A-Za-z ,.'-]{2,70})(?=\s{2,}|\n|\b(?:date|address|ssn|dob|report)\b)/i,
+  ]);
+  return label.replace(/\b(?:credit report|identityiq|smartcredit|credit hero)\b.*$/i, '').trim();
+}
+
+function detectProvider(normalized, fileName = '') {
+  const haystack = `${fileName} ${normalized.slice(0, 2000)}`.toLowerCase();
+  if (haystack.includes('identityiq') || haystack.includes('identity iq')) return 'IdentityIQ';
+  if (haystack.includes('smartcredit') || haystack.includes('smart credit')) return 'SmartCredit';
+  if (haystack.includes('credit hero')) return 'Credit Hero';
+  return 'Unknown';
+}
+
+function extractCurrency(line, labels) {
+  for (const label of labels) {
+    const match = line.match(new RegExp(`${label}[^$0-9-]{0,20}\\$?([0-9][0-9,]*(?:\\.\\d{2})?)`, 'i'));
+    if (match) return match[1].replace(/,/g, '');
+  }
+  return '';
+}
+
+function extractAccountName(line) {
+  const cleaned = line.replace(/\s+/g, ' ').trim();
+  const beforeLabels = cleaned.split(/\b(?:Account Type|Type|Balance|Status|Payment Status|Late|Past Due|Opened|Closed|Equifax|Experian|TransUnion|Trans Union|EQ|EX|TU)\b/i)[0].trim();
+  const match = beforeLabels.match(/^([A-Z0-9][A-Za-z0-9 &'./#-]{2,70})/);
+  return match ? match[1].trim() : '';
+}
+
+function extractAccountDetails(line) {
+  const status = extractFirstMatch(line, [/payment status\s*[:\-]?\s*([A-Za-z ]{2,35})/i, /\b(current|paid|late|collection|charge[- ]?off|repossession|closed|open)\b/i]);
+  const bureauTokens = ['Equifax', 'Experian', 'TransUnion'].filter((bureau) => new RegExp(`\\b${bureau}|${bureau === 'TransUnion' ? 'Trans Union|TU' : bureau.slice(0, 2)}\\b`, 'i').test(line));
+  return {
+    name: extractAccountName(line),
+    type: extractFirstMatch(line, [/(?:account type|type)\s*[:\-]?\s*([A-Za-z /-]{3,35})/i, /\b(credit card|revolving|installment|auto loan|mortgage|student loan|collection|charge[- ]?off)\b/i]),
+    balance: extractCurrency(line, ['balance', 'current balance', 'high balance']),
+    paymentStatus: status,
+    latePayments: extractFirstMatch(line, [/(?:late payments?|lates?)\s*[:\-]?\s*([0-9xX ,\/]+|(?:30|60|90|120)\s*days?[^;,.]*)/i]),
+    openClosedStatus: extractFirstMatch(line, [/\b(open|closed)\b/i]),
+    utilization: extractFirstMatch(line, [/(?:utilization|util)\s*[:\-]?\s*(\d{1,3}%)/i, /(\d{1,3}%)\s*(?:utilization|util)/i]),
+    bureaus: bureauTokens,
+  };
+}
+
+function extractAccounts(normalized) {
+  return normalized.split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /(?:balance|payment status|account type|\b(?:equifax|experian|transunion|trans union|eq|ex|tu)\b)/i.test(line) && /[A-Za-z]{3}/.test(line))
+    .map(extractAccountDetails)
+    .filter((account) => account.name && (account.balance || account.paymentStatus || account.type || account.bureaus.length))
+    .slice(0, 80);
+}
+
+function countByPattern(normalized, patterns) {
+  const explicit = extractNumber(normalized.replace(/\n/g, ' '), patterns);
+  if (explicit !== '') return explicit;
+  const joined = patterns.map((p) => p.source).join('|');
+  const re = new RegExp(joined.replace(/\[\^\\d\]\{0,20\}\(\\d\+\)/g, ''), 'gi');
+  return (normalized.match(re) || []).length || '';
+}
+
+function extractBureauReportingDifferences(accounts) {
+  return accounts
+    .filter((account) => account.bureaus.length > 0 && account.bureaus.length < 3)
+    .map((account) => `${account.name}: reporting on ${account.bureaus.join(', ')} only`);
+}
+
 function parseCreditReportText(text, file) {
-  const source = String(text || '');
-  const normalized = source.replace(/\s+/g, ' ').trim();
+  const source = normalizeCreditReportText(text);
+  const normalized = source.replace(/\n/g, ' ');
   if (normalized.length < 50) return null;
-  const getNum = (...patterns) => extractNumber(normalized, patterns);
-  const getText = (...patterns) => extractFirstMatch(normalized, patterns);
   const uploadedAt = new Date().toISOString();
+  const accounts = extractAccounts(source);
+  const collections = accounts.filter((a) => /collection/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/collections?[^\d]{0,20}(\d+)/i]);
+  const chargeOffs = accounts.filter((a) => /charge[- ]?off/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/charge[- ]?offs?[^\d]{0,20}(\d+)/i]);
+  const repossessions = accounts.filter((a) => /repo|repossession/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/(?:repossession(?:s)?|repo(?:s)?)[^\d]{0,20}(\d+)/i]);
+  const latePayments = accounts.filter((a) => a.latePayments || /late|30|60|90|120/i.test(a.paymentStatus)).length || countByPattern(normalized, [/late payments?[^\d]{0,20}(\d+)/i]);
   const report = {
-    id: crypto.randomUUID(),
-    fileName: file.name,
-    uploadedAt,
-    sourceLength: source.length,
+    id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
     uploadStatus: uploadStatuses.analyzed,
-    metadata: {
-      fileName: file.name,
-      fileType: file.type || 'unknown',
-      fileSize: file.size,
-      uploadedAt,
-      sourceLength: source.length,
-    },
-    analysis: 'parsed',
-    verified: true,
-    source: 'upload',
+    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider: detectProvider(source, file.name) },
+    analysis: 'parsed', verified: true, needsManualReview: false, source: 'upload', accounts,
+    bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
-      name: getText(/(?:client|consumer|borrower|name)\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,60})/i) || 'Uploaded report',
-      scores: {
-        equifax: getNum(/(?:equifax|eq)[^\d]{0,20}(\d{3})/i),
-        experian: getNum(/(?:experian|ex)[^\d]{0,20}(\d{3})/i),
-        transUnion: getNum(/(?:transunion|trans union|tu)[^\d]{0,20}(\d{3})/i),
-      },
+      name: extractClientName(source),
+      scores: { equifax: extractScore(normalized, 'equifax'), experian: extractScore(normalized, 'experian'), transUnion: extractScore(normalized, 'transUnion') },
       goal: 'Uploaded credit report analysis',
     },
-    negative: {
-      collections: getNum(/collections?[^\d]{0,20}(\d+)/i),
-      chargeOffs: getNum(/charge[- ]?offs?[^\d]{0,20}(\d+)/i),
-      repossessions: getNum(/(?:repossession(?:s)?|repo(?:s)?)[^\d]{0,20}(\d+)/i),
-      latePayments: getNum(/late payments?[^\d]{0,20}(\d+)/i),
-      bankruptcies: getText(/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i) || '',
-      publicRecords: getNum(/public records?[^\d]{0,20}(\d+)/i),
-      studentLoans: getNum(/student loans?[^\d]{0,20}(\d+)/i),
-    },
-    positive: {
-      revolving: getNum(/(?:open )?revolving(?: accounts?)?[^\d]{0,20}(\d+)/i),
-      installment: getNum(/installment(?: accounts?)?[^\d]{0,20}(\d+)/i),
-      mortgageHistory: getText(/mortgage history\s*[:\-]\s*([^.;\n]{1,80})/i),
-      autoLoans: getText(/auto loans?\s*[:\-]\s*([^.;\n]{1,80})/i),
-      authorizedUsers: getNum(/authorized users?[^\d]{0,20}(\d+)/i),
-      utilization: getText(/utilization\s*[:\-]\s*([^.;\n]{1,80})/i) || (getNum(/(\d{1,3})\s*%\s*(?:utilization|util)/i) ? `${getNum(/(\d{1,3})\s*%\s*(?:utilization|util)/i)}%` : ''),
-      creditMix: 'Parsed from uploaded report text. Verify before client use.',
-    },
-    notes: 'Parsed automatically from uploaded report text. Confirm all values before acting.',
+    negative: { collections, chargeOffs, repossessions, latePayments, bankruptcies: extractFirstMatch(normalized, [/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i]) || '', publicRecords: extractNumber(normalized, [/public records?[^\d]{0,20}(\d+)/i]), studentLoans: accounts.filter((a) => /student/i.test(a.type)).length || extractNumber(normalized, [/student loans?[^\d]{0,20}(\d+)/i]) },
+    positive: { revolving: accounts.filter((a) => /revolving|credit card/i.test(a.type)).length || extractNumber(normalized, [/(?:open )?revolving(?: accounts?)?[^\d]{0,20}(\d+)/i]), installment: accounts.filter((a) => /installment|auto|mortgage|student/i.test(a.type)).length || extractNumber(normalized, [/installment(?: accounts?)?[^\d]{0,20}(\d+)/i]), mortgageHistory: extractFirstMatch(normalized, [/mortgage history\s*[:\-]\s*([^.;\n]{1,80})/i]), autoLoans: extractFirstMatch(normalized, [/auto loans?\s*[:\-]\s*([^.;\n]{1,80})/i]), authorizedUsers: extractNumber(normalized, [/authorized users?[^\d]{0,20}(\d+)/i]), utilization: extractFirstMatch(normalized, [/utilization\s*[:\-]\s*([^.;\n]{1,80})/i, /(\d{1,3})\s*%\s*(?:utilization|util)/i]), creditMix: 'Parsed from uploaded report text; verify account-level rows before client use.' },
+    notes: 'Parsed automatically from uploaded IdentityIQ, SmartCredit, Credit Hero, or text-based credit report. No missing values were guessed.',
   };
-  const hasScores = Object.values(report.clientProfile.scores).some((value) => value !== '');
-  const hasNegative = Object.values(report.negative).some((value) => value !== '');
-  const hasPositive = Object.values(report.positive).some((value) => value !== '');
-  return hasScores || hasNegative || hasPositive ? report : null;
+  report.parseConfidence = buildParseConfidence(report);
+  if (report.parseConfidence.low) {
+    report.uploadStatus = uploadStatuses.manualReview;
+    report.verified = false;
+    report.needsManualReview = true;
+    report.parseMessage = `Manual review required: ${report.parseConfidence.reasons.join(', ') || 'low extraction confidence'}.`;
+  }
+  return report;
 }
 
 function normalizeManualAnalysis(formData) {
@@ -1223,11 +1340,13 @@ function renderCreditFileIntelligenceDashboard() {
   }
   if (!report.verified) {
     setCreditUploadStatus(report.parseMessage || parseUnavailableMessage);
-    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>`;
+    const confidence = report.parseConfidence ? `Confidence: ${Math.round(report.parseConfidence.score * 100)}%` : 'Confidence unavailable';
+    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">Manual Review Queue</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p>${escapeHtml(confidence)}. No missing values were guessed.</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>`;
     return;
   }
   const { disputes, rebuild } = strategyForCreditFile(report);
   const n = report.negative, p = report.positive, profile = report.clientProfile;
+  const accountRows = (report.accounts || []).map((account) => `<tr><td>${escapeHtml(account.name || '—')}</td><td>${escapeHtml(account.type || '—')}</td><td>${escapeHtml(account.balance || '—')}</td><td>${escapeHtml(account.paymentStatus || '—')}</td><td>${escapeHtml(account.latePayments || '—')}</td><td>${escapeHtml(account.openClosedStatus || '—')}</td><td>${escapeHtml(account.utilization || '—')}</td><td>${escapeHtml((account.bureaus || []).join(', ') || '—')}</td></tr>`).join('');
   const score = report.mortgageReadinessScore ?? calculateManualMortgageReadiness(report);
   const scoreText = score === null ? 'Manual review needed' : `${score}/100`;
   const updateMessage = `Hi ${profile.name}, your verified credit file review is complete. Current scores are EQ ${profile.scores.equifax || 'not entered'}, EX ${profile.scores.experian || 'not entered'}, and TU ${profile.scores.transUnion || 'not entered'}. The main priorities are ${disputes[0]} Next we will focus on ${rebuild[0]} Mortgage readiness is ${scoreText}.`;
@@ -1236,10 +1355,11 @@ function renderCreditFileIntelligenceDashboard() {
     <section class="intel-hero card"><div><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span><span class="badge success-badge">Verified data</span></div><p class="eyebrow">Client profile</p><h3>${escapeHtml(profile.name || '—')}</h3><p>${escapeHtml(profile.goal || '—')}</p></div><div class="score-stack"><span>EQ ${escapeHtml(profile.scores.equifax || '—')}</span><span>EX ${escapeHtml(profile.scores.experian || '—')}</span><span>TU ${escapeHtml(profile.scores.transUnion || '—')}</span></div></section>
     <div class="metrics-grid"><article class="metric-card"><span>Mortgage Readiness Score</span><strong>${escapeHtml(scoreText)}</strong></article><article class="metric-card"><span>Negative Categories</span><strong>${Object.values(n).filter(Boolean).length}</strong></article><article class="metric-card"><span>Positive Tradelines</span><strong>${asNumber(p.revolving)+asNumber(p.installment)+asNumber(p.authorizedUsers)}</strong></article></div>
     <div class="intelligence-grid">
-      <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Bankruptcy', n.bankruptcies)}${detail('Student loans', n.studentLoans)}</dl></article>
+      <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Bankruptcy', n.bankruptcies)}${detail('Student loans', n.studentLoans)}${detail('Bureau differences', (report.bureauReportingDifferences || []).join('\n'))}</dl></article>
       <article class="card"><h3>Positive Credit Line Intelligence</h3><dl>${detail('Open revolving accounts', p.revolving)}${detail('Installment accounts', p.installment)}${detail('Mortgage history', p.mortgageHistory)}${detail('Auto loan', p.autoLoans)}${detail('Authorized users', p.authorizedUsers)}${detail('Utilization analysis', p.utilization)}${detail('Notes', report.notes)}</dl></article>
       <article class="card"><h3>Recommended Dispute Strategy</h3>${list(disputes)}</article>
       <article class="card"><h3>Recommended Rebuild Strategy</h3>${list(rebuild)}</article>
+      <article class="card account-table-card"><h3>Extracted Account-Level Data</h3><div class="table-scroll"><table><thead><tr><th>Account</th><th>Type</th><th>Balance</th><th>Payment</th><th>Lates</th><th>Open/Closed</th><th>Util.</th><th>Bureaus</th></tr></thead><tbody>${accountRows || '<tr><td colspan="8">No account rows extracted.</td></tr>'}</tbody></table></div></article>
       <article class="card"><h3>Client Update Message Generator</h3><textarea readonly>${escapeHtml(updateMessage)}</textarea></article>
     </div>
     <p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p>`;
@@ -1253,24 +1373,22 @@ function handleCreditReportFile(file) {
   setCreditUploadStatus('Processing report...');
   renderCreditFileIntelligenceDashboard();
   setCreditUploadStatus('Processing report...');
-  const reader = new FileReader();
-  reader.onload = () => {
-    const text = String(reader.result || '');
+  readCreditReportFile(file).then((text) => {
     const parsed = parseCreditReportText(text, file);
     const report = parsed || createUnparsedCreditFileReport(file.name, text.length);
+    if (report.needsManualReview) enqueueManualReview(report);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-    setCreditUploadStatus(parsed ? uploadStatuses.analyzed : parseUnavailableMessage);
+    setCreditUploadStatus(report.needsManualReview ? (report.parseMessage || parseUnavailableMessage) : uploadStatuses.analyzed);
     renderCreditFileIntelligenceDashboard();
-    if (!parsed) openManualReviewMode();
-  };
-  reader.onerror = () => {
+    if (report.needsManualReview) openManualReviewMode();
+  }).catch(() => {
     const report = createUnparsedCreditFileReport(file.name, 0);
+    enqueueManualReview(report);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
     setCreditUploadStatus(parseUnavailableMessage);
     renderCreditFileIntelligenceDashboard();
     openManualReviewMode();
-  };
-  reader.readAsText(file);
+  });
 }
 
 function saveManualCreditAnalysis(event) {

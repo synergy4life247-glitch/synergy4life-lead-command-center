@@ -425,7 +425,7 @@
           </div>
           <div id="credit-report-dropzone" class="drop-zone" tabindex="0" role="button" aria-label="Upload PDF or TXT credit report">
             <strong>Drop credit report here</strong>
-            <span>PDF and TXT files supported</span>
+            <span>Text-based PDF and TXT files supported. Low-confidence extracts go to Manual Review Queue.</span>
             <input id="credit-report-upload" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
             <button id="credit-report-upload-button" class="primary" type="button">Upload Report</button>
             <button id="open-manual-review" class="secondary" type="button">Open Manual Review</button>
@@ -1178,6 +1178,7 @@
       </article>
     </template>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
     <script src="app.js"></script>
   </body>
 </html>
