@@ -1261,12 +1261,115 @@ function extractClientName(normalized) {
   return label.replace(/\b(?:credit report|identityiq|smartcredit|credit hero)\b.*$/i, '').trim();
 }
 
+
+const providerProfiles = {
+  IdentityIQ: [
+    /\bidentity\s*iq\b/i,
+    /\bIdentityIQ\b/i,
+    /Vantage\s*Score\s*®?\s*3\.0/i,
+    /Quick\s+Links\s*:\s*Credit\s+Score/i,
+    /^\s*Personal\s+Information\s*$/im,
+    /^\s*Account\s+Summary\s*$/im,
+    /^\s*Account\s+History\s*$/im,
+    /\bBack\s+to\s+Top\b/i,
+  ],
+  'Credit Hero': [/\bcredit\s*hero\b/i, /credithero/i],
+  SmartCredit: [/\bsmart\s*credit\b/i, /\bSmartCredit\b/i],
+};
+
 function detectProvider(normalized, fileName = '') {
-  const haystack = `${fileName} ${normalized.slice(0, 2000)}`.toLowerCase();
-  if (haystack.includes('identityiq') || haystack.includes('identity iq')) return 'IdentityIQ';
-  if (haystack.includes('smartcredit') || haystack.includes('smart credit')) return 'SmartCredit';
-  if (haystack.includes('credit hero')) return 'Credit Hero';
+  const haystack = `${fileName}\n${normalized}`;
+  const identityMatches = providerProfiles.IdentityIQ.filter((marker) => marker.test(haystack)).length;
+  if (identityMatches >= 2) return 'IdentityIQ';
+  if (providerProfiles['Credit Hero'].some((marker) => marker.test(haystack))) return 'Credit Hero';
+  if (providerProfiles.SmartCredit.some((marker) => marker.test(haystack))) return 'SmartCredit';
+  if (identityMatches === 1) return 'IdentityIQ';
   return 'Unknown';
+}
+
+function getSection(source, startPattern, endPatterns = []) {
+  const lines = String(source || '').split('\n');
+  const start = lines.findIndex((line) => startPattern.test(line.trim()));
+  if (start < 0) return '';
+  const section = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (endPatterns.some((pattern) => pattern.test(line))) break;
+    section.push(lines[i]);
+  }
+  return section.join('\n').trim();
+}
+
+function extractIdentityIqScores(source) {
+  const creditSection = getSection(source, /^Credit\s+Score$/i, [/^Personal\s+Information$/i, /^Account\s+Summary$/i, /^Quick\s+Links/i]);
+  const scoreSource = creditSection || source;
+  const vantageIndex = scoreSource.search(/Vantage\s*Score\s*®?\s*3\.0/i);
+  const relevant = vantageIndex >= 0 ? scoreSource.slice(vantageIndex, vantageIndex + 1000) : scoreSource;
+  const scores = [...relevant.matchAll(/\b([3-8]\d{2})\b/g)].map((match) => match[1]).filter((score) => Number(score) >= 300 && Number(score) <= 850);
+  const unique = scores.filter((score, index) => scores.indexOf(score) === index);
+  return { transUnion: unique[0] || '', experian: unique[1] || '', equifax: unique[2] || '' };
+}
+
+function extractIdentityIqClientName(source) {
+  const section = getSection(source, /^Personal\s+Information$/i, [/^Account\s+Summary$/i, /^Credit\s+Score$/i, /^Account\s+History$/i]);
+  const lines = (section || source).split('\n').map((line) => line.trim()).filter(Boolean);
+  const nameLabelIndex = lines.findIndex((line) => /^Name\b/i.test(line));
+  const stopPattern = /^(?:Also\s+Known\s+As|Former|Date\s+of\s+Birth|DOB|SSN|Address|Phone|Employer|Account\s+Summary)\b/i;
+  const validName = (line) => /^[A-Z][A-Z .'’-]+(?:\s+[A-Z][A-Z .'’-]+)+$/i.test(line) && !stopPattern.test(line) && !/identityiq|credit score|personal information/i.test(line);
+  if (nameLabelIndex >= 0) {
+    for (let i = nameLabelIndex + 1; i < lines.length; i += 1) {
+      if (stopPattern.test(lines[i])) break;
+      if (validName(lines[i])) return lines[i].replace(/\s+/g, ' ').trim();
+    }
+  }
+  const fallback = lines.find(validName);
+  return fallback ? fallback.replace(/\s+/g, ' ').trim() : '';
+}
+
+function extractIdentityIqAccountSummary(source) {
+  const section = getSection(source, /^Account\s+Summary$/i, [/^Account\s+History$/i, /^Inquiries$/i, /^Personal\s+Information$/i]);
+  const flat = section.replace(/\n/g, ' ');
+  const labels = {
+    totalAccounts: 'Total Accounts', openAccounts: 'Open Accounts', closedAccounts: 'Closed Accounts',
+    delinquent: 'Delinquent', derogatory: 'Derogatory', collection: 'Collection', balances: 'Balances',
+    payments: 'Payments', publicRecords: 'Public Records', inquiries: 'Inquiries',
+  };
+  const summary = {};
+  Object.entries(labels).forEach(([key, label]) => {
+    const escaped = label.replace(/ /g, '\\s+');
+    const match = flat.match(new RegExp(`${escaped}[^0-9$-]{0,40}(\\$?[0-9][0-9,]*(?:\\.\\d{2})?)`, 'i'));
+    summary[key] = match ? match[1].replace(/,/g, '') : '';
+  });
+  return summary;
+}
+
+function extractIdentityIqTradelines(source) {
+  const section = getSection(source, /^Account\s+History$/i, [/^Inquiries$/i, /^Public\s+(?:Records|Information)$/i]);
+  const lines = section.split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const accounts = [];
+  const known = /\b(?:CHILDSUPPORT|CAPITAL ONE|CHIME-STRIDE|1ST CRD SRVC|SBA|SYNCB|SYNCHRONY|COMENITY|DISCOVER|CHASE|CITI|WELLS FARGO|PORTFOLIO|MIDLAND|LVNV|ALLY|SANTANDER|TOYOTA|HONDA|FORD|NAVIENT|NELNET|MOHELA)\b/i;
+  lines.forEach((line, index) => {
+    const candidate = line.split(/\s{2,}|\b(?:Account Number|Account Type|Balance|Status|Date Opened)\b/i)[0].trim();
+    const upperLikeHeader = /^[A-Z0-9][A-Z0-9 &'./#-]{2,70}$/.test(candidate) && /[A-Z]{3}/.test(candidate);
+    if (!isValidAccountName(candidate, line) && !known.test(candidate) && !upperLikeHeader) return;
+    if (ignoredAccountNamePattern.test(candidate)) return;
+    const detailsText = [line, lines[index + 1] || '', lines[index + 2] || '', lines[index + 3] || ''].join(' ');
+    accounts.push({ ...extractAccountDetails(`${candidate} ${detailsText}`), name: candidate });
+  });
+  return mergeDuplicateAccounts(accounts).slice(0, 80);
+}
+
+function buildIdentityIqParseConfidence(report, detections) {
+  let points = 0;
+  const reasons = [];
+  if (detections.allScoresFound) points += 25; else reasons.push('all 3 scores not found');
+  if (detections.clientNameFound) points += 20; else reasons.push('client name not found');
+  if (detections.accountSummaryFound) points += 20; else reasons.push('account summary not found');
+  if (detections.tradelinesFound) points += 25; else reasons.push('tradelines not found');
+  if (detections.bureauDifferencesFound) points += 10; else reasons.push('bureau differences not detected');
+  const score = points / 100;
+  if (score < 0.6) reasons.push(`IdentityIQ confidence below 60% (${points}%)`);
+  return { score, low: score < 0.6, reasons, provider: 'IdentityIQ', debug: detections };
 }
 
 function extractCurrency(line, labels) {
@@ -1380,7 +1483,14 @@ function parseCreditReportText(text, file, options = {}) {
   const normalized = source.replace(/\n/g, ' ');
   if (normalized.length < 50) return null;
   const uploadedAt = new Date().toISOString();
-  const accounts = extractAccounts(source);
+  const provider = detectProvider(source, file.name);
+  const identityIqData = provider === 'IdentityIQ' ? {
+    scores: extractIdentityIqScores(source),
+    clientName: extractIdentityIqClientName(source),
+    accountSummary: extractIdentityIqAccountSummary(source),
+    tradelines: extractIdentityIqTradelines(source),
+  } : null;
+  const accounts = identityIqData ? identityIqData.tradelines : extractAccounts(source);
   const collections = accounts.filter((a) => /collection/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/collections?[^\d]{0,20}(\d+)/i]);
   const chargeOffs = accounts.filter((a) => /charge[- ]?off/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/charge[- ]?offs?[^\d]{0,20}(\d+)/i]);
   const repoKeywordPattern = /\b(?:REPOSSESSION|AUTO LOAN REPO|FORECLOSURE|REPO|RF)\b/i;
@@ -1389,19 +1499,38 @@ function parseCreditReportText(text, file, options = {}) {
   const report = {
     id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
     uploadStatus: uploadStatuses.analyzed,
-    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider: detectProvider(source, file.name), extractionMode: options.extractionMode || 'text', ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
+    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
     analysis: 'parsed', verified: true, needsManualReview: false, source: 'upload', accounts,
     bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
-      name: extractClientName(source),
-      scores: { equifax: extractScore(source, 'equifax'), experian: extractScore(source, 'experian'), transUnion: extractScore(source, 'transUnion') },
+      name: identityIqData ? identityIqData.clientName : extractClientName(source),
+      scores: identityIqData ? identityIqData.scores : { equifax: extractScore(source, 'equifax'), experian: extractScore(source, 'experian'), transUnion: extractScore(source, 'transUnion') },
       goal: 'Uploaded credit report analysis',
     },
-    negative: { collections, chargeOffs, repossessions, latePayments, bankruptcies: extractFirstMatch(normalized, [/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i]) || '', publicRecords: extractNumber(normalized, [/public records?[^\d]{0,20}(\d+)/i]), studentLoans: accounts.filter((a) => /student/i.test(a.type)).length || extractNumber(normalized, [/student loans?[^\d]{0,20}(\d+)/i]), inquiries: extractNumber(normalized, [/inquiries[^\d]{0,20}(\d+)/i, /hard inquiries[^\d]{0,20}(\d+)/i]) },
-    positive: { revolving: accounts.filter((a) => /revolving|credit card/i.test(a.type)).length || extractNumber(normalized, [/(?:open )?revolving(?: accounts?)?[^\d]{0,20}(\d+)/i]), installment: accounts.filter((a) => /installment|auto|mortgage|student/i.test(a.type)).length || extractNumber(normalized, [/installment(?: accounts?)?[^\d]{0,20}(\d+)/i]), mortgageHistory: extractFirstMatch(normalized, [/mortgage history\s*[:\-]\s*([^.;\n]{1,80})/i]), autoLoans: extractFirstMatch(normalized, [/auto loans?\s*[:\-]\s*([^.;\n]{1,80})/i]), authorizedUsers: extractNumber(normalized, [/authorized users?[^\d]{0,20}(\d+)/i]), utilization: extractFirstMatch(normalized, [/utilization\s*[:\-]\s*([^.;\n]{1,80})/i, /(\d{1,3})\s*%\s*(?:utilization|util)/i]), creditMix: 'Parsed from uploaded report text; verify account-level rows before client use.' },
+    accountSummary: identityIqData ? identityIqData.accountSummary : null,
+    negative: { collections: identityIqData?.accountSummary.collection || collections, chargeOffs, repossessions, latePayments, bankruptcies: extractFirstMatch(normalized, [/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i]) || '', publicRecords: identityIqData?.accountSummary.publicRecords || extractNumber(normalized, [/public records?[^\d]{0,20}(\d+)/i]), studentLoans: accounts.filter((a) => /student/i.test(a.type)).length || extractNumber(normalized, [/student loans?[^\d]{0,20}(\d+)/i]), inquiries: identityIqData?.accountSummary.inquiries || extractNumber(normalized, [/inquiries[^\d]{0,20}(\d+)/i, /hard inquiries[^\d]{0,20}(\d+)/i]) },
+    positive: { totalAccounts: identityIqData?.accountSummary.totalAccounts || '', openAccounts: identityIqData?.accountSummary.openAccounts || '', closedAccounts: identityIqData?.accountSummary.closedAccounts || '', balances: identityIqData?.accountSummary.balances || '', payments: identityIqData?.accountSummary.payments || '', revolving: accounts.filter((a) => /revolving|credit card/i.test(a.type)).length || extractNumber(normalized, [/(?:open )?revolving(?: accounts?)?[^\d]{0,20}(\d+)/i]), installment: accounts.filter((a) => /installment|auto|mortgage|student/i.test(a.type)).length || extractNumber(normalized, [/installment(?: accounts?)?[^\d]{0,20}(\d+)/i]), mortgageHistory: extractFirstMatch(normalized, [/mortgage history\s*[:\-]\s*([^.;\n]{1,80})/i]), autoLoans: extractFirstMatch(normalized, [/auto loans?\s*[:\-]\s*([^.;\n]{1,80})/i]), authorizedUsers: extractNumber(normalized, [/authorized users?[^\d]{0,20}(\d+)/i]), utilization: extractFirstMatch(normalized, [/utilization\s*[:\-]\s*([^.;\n]{1,80})/i, /(\d{1,3})\s*%\s*(?:utilization|util)/i]), creditMix: 'Parsed from uploaded report text; verify account-level rows before client use.' },
     notes: `Parsed automatically from uploaded IdentityIQ, SmartCredit, Credit Hero, text-based, or OCR-scanned credit report. Extraction mode: ${options.extractionMode || 'text'}. No missing values were guessed.`,
   };
-  report.parseConfidence = buildParseConfidence(report);
+  if (identityIqData) {
+    const detections = {
+      providerDetected: provider,
+      scoresDetected: Object.entries(identityIqData.scores).filter(([, value]) => value).map(([bureau, value]) => `${bureau}: ${value}`),
+      clientNameDetected: identityIqData.clientName || '',
+      accountSummaryDetected: Object.entries(identityIqData.accountSummary).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`),
+      tradelinesDetected: identityIqData.tradelines.map((account) => account.name),
+      allScoresFound: Object.values(identityIqData.scores).filter(Boolean).length === 3,
+      clientNameFound: Boolean(identityIqData.clientName),
+      accountSummaryFound: Object.values(identityIqData.accountSummary).some(Boolean),
+      tradelinesFound: identityIqData.tradelines.length > 0,
+      bureauDifferencesFound: report.bureauReportingDifferences.length > 0,
+    };
+    report.parserDebug = detections;
+    report.parseConfidence = buildIdentityIqParseConfidence(report, detections);
+  } else {
+    report.parserDebug = { providerDetected: provider, scoresDetected: Object.values(report.clientProfile.scores).filter(Boolean), clientNameDetected: report.clientProfile.name || '', accountSummaryDetected: [], tradelinesDetected: accounts.map((account) => account.name) };
+    report.parseConfidence = buildParseConfidence(report);
+  }
   if (report.parseConfidence.low) {
     report.uploadStatus = uploadStatuses.manualReview;
     report.verified = false;
@@ -1471,6 +1600,13 @@ function strategyForCreditFile(report) {
   return { disputes, rebuild };
 }
 
+
+function renderParserDebug(report) {
+  const debug = report?.parserDebug || {};
+  const listValue = (value) => Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : (value || 'None');
+  return `<article class="card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}</dl></article>`;
+}
+
 function renderCreditFileIntelligenceDashboard() {
   if (!creditFileIntelligenceDashboard) return;
   const report = getCreditFileIntelligence();
@@ -1484,7 +1620,7 @@ function renderCreditFileIntelligenceDashboard() {
   if (!report.verified) {
     setCreditUploadStatus(report.parseMessage || parseUnavailableMessage);
     const confidence = report.parseConfidence ? `Confidence: ${Math.round(report.parseConfidence.score * 100)}%` : 'Confidence unavailable';
-    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">Manual Review Queue</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p>${escapeHtml(confidence)}. No missing values were guessed.</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>`;
+    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">Manual Review Queue</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p>${escapeHtml(confidence)}. No missing values were guessed.</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>${renderParserDebug(report)}`;
     return;
   }
   const { disputes, rebuild } = strategyForCreditFile(report);
@@ -1502,6 +1638,7 @@ function renderCreditFileIntelligenceDashboard() {
       <article class="card"><h3>Positive Credit Line Intelligence</h3><dl>${detail('Open revolving accounts', p.revolving)}${detail('Installment accounts', p.installment)}${detail('Mortgage history', p.mortgageHistory)}${detail('Auto loan', p.autoLoans)}${detail('Authorized users', p.authorizedUsers)}${detail('Utilization analysis', p.utilization)}${detail('Notes', report.notes)}</dl></article>
       <article class="card"><h3>Recommended Dispute Strategy</h3>${list(disputes)}</article>
       <article class="card"><h3>Recommended Rebuild Strategy</h3>${list(rebuild)}</article>
+      ${renderParserDebug(report)}
       <article class="card account-table-card"><h3>Extracted Account-Level Data</h3><div class="table-scroll"><table><thead><tr><th>Account</th><th>Type</th><th>Balance</th><th>Payment</th><th>Lates</th><th>Open/Closed</th><th>Util.</th><th>Bureaus</th></tr></thead><tbody>${accountRows || '<tr><td colspan="8">No account rows extracted.</td></tr>'}</tbody></table></div></article>
       <article class="card"><h3>Client Update Message Generator</h3><textarea readonly>${escapeHtml(updateMessage)}</textarea></article>
     </div>
