@@ -346,3 +346,42 @@ button:disabled {
 @media (min-width: 1000px) {
   .intelligence-preview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+.dashboard-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: .5rem 0 1rem;
+  padding: 1.25rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 1.25rem;
+  color: white;
+  background: linear-gradient(135deg, #172554, #2563eb 68%, #38bdf8);
+  box-shadow: var(--shadow);
+}
+.dashboard-hero p:not(.eyebrow) { margin: .5rem 0 0; max-width: 760px; opacity: .88; }
+.quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.quick-actions button:last-child { grid-column: 1 / -1; }
+.dashboard-sections { display: grid; gap: 1rem; }
+.dashboard-widget { padding: 1rem; border: 1px solid var(--line); border-radius: 1.1rem; background: var(--card); box-shadow: var(--shadow); }
+.dashboard-widget-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
+.dashboard-widget-header h3 { margin-bottom: 0; }
+.dashboard-widget .metrics-grid { margin-bottom: 0; }
+.dashboard-metric-card { position: relative; overflow: hidden; }
+.dashboard-metric-card::after { content: ''; position: absolute; right: -.9rem; bottom: -.9rem; width: 4rem; height: 4rem; border-radius: 999px; background: rgba(37, 99, 235, .09); }
+.activity-widget { margin-top: 1rem; }
+.activity-feed { display: grid; gap: .75rem; }
+.activity-item { display: grid; grid-template-columns: auto 1fr; gap: .75rem; align-items: start; padding: .85rem; border: 1px solid #dbeafe; border-radius: 1rem; background: #f8fbff; }
+.activity-dot { width: .8rem; height: .8rem; margin-top: .35rem; border-radius: 999px; background: var(--brand); box-shadow: 0 0 0 4px #dbeafe; }
+.activity-item h4 { margin: 0 0 .2rem; font-size: .98rem; }
+.activity-item p { margin: 0; color: var(--muted); font-weight: 700; }
+.activity-time { display: block; margin-top: .25rem; color: #475467; font-size: .8rem; font-weight: 800; }
+@media (min-width: 720px) {
+  .quick-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .quick-actions button:last-child { grid-column: auto; }
+}
+@media (min-width: 1000px) {
+  .dashboard-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-widget.wide-widget { grid-column: 1 / -1; }
+}
