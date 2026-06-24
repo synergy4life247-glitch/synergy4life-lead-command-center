@@ -25,6 +25,7 @@
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="communications">Communications</button>
+      <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -548,6 +549,87 @@
         </div>
 
         <div id="communication-list" class="communication-timeline empty-state" aria-live="polite"></div>
+      </section>
+
+
+      <section id="revenue-center" class="panel" aria-labelledby="revenue-center-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Profit command</p>
+            <h2 id="revenue-center-heading">Revenue Center</h2>
+          </div>
+          <span id="revenue-transaction-count" class="count-pill">0 transactions</span>
+        </div>
+
+        <div class="metrics-grid revenue-metrics" aria-label="Revenue dashboard metrics">
+          <article class="metric-card"><span>Total Revenue</span><strong id="metric-total-revenue">$0</strong></article>
+          <article class="metric-card"><span>Monthly Revenue</span><strong id="metric-monthly-revenue">$0</strong></article>
+          <article class="metric-card"><span>Total Expenses</span><strong id="metric-total-expenses">$0</strong></article>
+          <article class="metric-card"><span>Net Profit</span><strong id="metric-net-profit">$0</strong></article>
+          <article class="metric-card"><span>Average Client Value</span><strong id="metric-average-client-value">$0</strong></article>
+        </div>
+
+        <div class="revenue-summary-grid">
+          <section class="dashboard-widget">
+            <div class="dashboard-widget-header"><h3>Revenue By Service Type</h3></div>
+            <div id="revenue-service-chart" class="chart-list" aria-live="polite"></div>
+          </section>
+          <section class="dashboard-widget">
+            <div class="dashboard-widget-header"><h3>Monthly Revenue Reports</h3></div>
+            <div id="monthly-revenue-report" class="chart-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <div class="revenue-entry-grid">
+          <form id="income-form" class="tracker-form">
+            <input type="hidden" id="income-id" />
+            <div class="section-header compact-header">
+              <div><p class="eyebrow">Cash in</p><h3>Income Entry</h3></div>
+            </div>
+            <div class="form-grid">
+              <label>Date<input id="incomeDate" name="incomeDate" type="date" required /></label>
+              <label>Client Name<input id="incomeClientName" name="incomeClientName" placeholder="Jane Smith" required /></label>
+              <label>Revenue Type<select id="incomeRevenueType" name="incomeRevenueType"></select></label>
+              <label>Amount<input id="incomeAmount" name="incomeAmount" type="number" min="0" step="0.01" placeholder="499" required /></label>
+              <label>Payment Method<input id="incomePaymentMethod" name="incomePaymentMethod" placeholder="ACH, Stripe, Cash App" /></label>
+            </div>
+            <label>Notes<textarea id="incomeNotes" name="incomeNotes" placeholder="Invoice, program, campaign, or payment context"></textarea></label>
+            <div class="form-actions">
+              <button class="primary" type="submit">Save Income</button>
+              <button id="reset-income-form" class="secondary" type="button">Clear</button>
+            </div>
+          </form>
+
+          <form id="expense-form" class="tracker-form">
+            <input type="hidden" id="expense-id" />
+            <div class="section-header compact-header">
+              <div><p class="eyebrow">Cash out</p><h3>Expense Entry</h3></div>
+            </div>
+            <div class="form-grid">
+              <label>Date<input id="expenseDate" name="expenseDate" type="date" required /></label>
+              <label>Expense Category<select id="expenseCategory" name="expenseCategory"></select></label>
+              <label>Amount<input id="expenseAmount" name="expenseAmount" type="number" min="0" step="0.01" placeholder="99" required /></label>
+              <label>Vendor<input id="expenseVendor" name="expenseVendor" placeholder="Meta, GoHighLevel, VA name" /></label>
+            </div>
+            <label>Notes<textarea id="expenseNotes" name="expenseNotes" placeholder="Receipt, campaign, subscription, or trip context"></textarea></label>
+            <div class="form-actions">
+              <button class="primary" type="submit">Save Expense</button>
+              <button id="reset-expense-form" class="secondary" type="button">Clear</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="filter-panel revenue-controls">
+          <label>Search Transactions<input id="revenue-search" placeholder="Search client, vendor, category, payment method, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Transaction Type<select id="revenue-kind-filter"><option value="">All transactions</option><option value="income">Income</option><option value="expense">Expenses</option></select></label>
+            <label>Category / Revenue Type<select id="revenue-category-filter"><option value="">All categories</option></select></label>
+            <label>Start Date<input id="revenue-start-filter" type="date" /></label>
+            <label>End Date<input id="revenue-end-filter" type="date" /></label>
+          </div>
+        </div>
+
+        <div id="revenue-transaction-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">

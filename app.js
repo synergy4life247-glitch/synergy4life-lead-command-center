@@ -10,6 +10,7 @@ const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 const DASHBOARD_KEY = 'synergy4life.dashboard';
 const DOCUMENTS_KEY = 'synergy4life.documents';
 const COMMUNICATIONS_KEY = 'synergy4life.communications';
+const REVENUE_CENTER_KEY = 'synergy4life.revenueCenter';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -60,6 +61,10 @@ const communicationContactTypes = ['Lead', 'Client', 'Mentee', 'Realtor Lead', '
 const communicationTypes = ['Call', 'Text', 'Email', 'Facebook Messenger', 'Instagram DM', 'Skool Message', 'Zoom', 'In Person'];
 const communicationOutcomes = ['No Answer', 'Left Voicemail', 'Follow Up Needed', 'Appointment Set', 'Enrolled', 'Closed', 'Not Interested'];
 const communicationFields = ['communicationContactName', 'communicationContactType', 'communicationType', 'communicationDateTime', 'communicationSubject', 'communicationNotes', 'communicationOutcome', 'communicationFollowUpDate'];
+const revenueTypeOptions = ['Credit Repair Enrollment', 'Monthly Program Payment', 'Mentorship', 'Backend Service', 'Real Estate Commission', 'Course Sales', 'Skool Membership', 'Affiliate Income', 'Other'];
+const expenseCategoryOptions = ['Marketing', 'Software', 'VA Payroll', 'Office Expense', 'Business Travel', 'Education', 'Advertising', 'Other'];
+const incomeFields = ['incomeDate', 'incomeClientName', 'incomeRevenueType', 'incomeAmount', 'incomePaymentMethod', 'incomeNotes'];
+const expenseFields = ['expenseDate', 'expenseCategory', 'expenseAmount', 'expenseVendor', 'expenseNotes'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -121,6 +126,15 @@ const communicationContactFilter = document.querySelector('#communication-contac
 const communicationTypeFilter = document.querySelector('#communication-type-filter');
 const communicationOutcomeFilter = document.querySelector('#communication-outcome-filter');
 const communicationDateFilter = document.querySelector('#communication-date-filter');
+const incomeForm = document.querySelector('#income-form');
+const expenseForm = document.querySelector('#expense-form');
+const revenueTransactionCount = document.querySelector('#revenue-transaction-count');
+const revenueTransactionList = document.querySelector('#revenue-transaction-list');
+const revenueSearch = document.querySelector('#revenue-search');
+const revenueKindFilter = document.querySelector('#revenue-kind-filter');
+const revenueCategoryFilter = document.querySelector('#revenue-category-filter');
+const revenueStartFilter = document.querySelector('#revenue-start-filter');
+const revenueEndFilter = document.querySelector('#revenue-end-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -154,6 +168,173 @@ function seedSelect(select, values, allLabel = '') {
 }
 
 
+
+
+function getRevenueRecords() {
+  const records = readStore(REVENUE_CENTER_KEY);
+  return Array.isArray(records) ? records : [];
+}
+
+function getIncomeFormData() {
+  return incomeFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function getExpenseFormData() {
+  return expenseFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetIncomeForm() {
+  incomeForm.reset();
+  document.querySelector('#income-id').value = '';
+  document.querySelector('#incomeDate').value = todayDateString();
+  document.querySelector('#incomeRevenueType').value = revenueTypeOptions[0];
+}
+
+function resetExpenseForm() {
+  expenseForm.reset();
+  document.querySelector('#expense-id').value = '';
+  document.querySelector('#expenseDate').value = todayDateString();
+  document.querySelector('#expenseCategory').value = expenseCategoryOptions[0];
+}
+
+function saveIncome(event) {
+  event.preventDefault();
+  const records = getRevenueRecords();
+  const id = document.querySelector('#income-id').value || crypto.randomUUID();
+  const existing = records.findIndex((item) => item.id === id);
+  const record = { id, kind: 'income', ...getIncomeFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? records[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) records[existing] = record;
+  else records.unshift(record);
+  writeStore(REVENUE_CENTER_KEY, records);
+  resetIncomeForm();
+  render();
+}
+
+function saveExpense(event) {
+  event.preventDefault();
+  const records = getRevenueRecords();
+  const id = document.querySelector('#expense-id').value || crypto.randomUUID();
+  const existing = records.findIndex((item) => item.id === id);
+  const record = { id, kind: 'expense', ...getExpenseFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? records[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) records[existing] = record;
+  else records.unshift(record);
+  writeStore(REVENUE_CENTER_KEY, records);
+  resetExpenseForm();
+  render();
+}
+
+function editRevenueRecord(id) {
+  const record = getRevenueRecords().find((item) => item.id === id);
+  if (!record) return;
+  document.querySelector('[data-tab="revenue-center"]').click();
+  if (record.kind === 'income') {
+    document.querySelector('#income-id').value = id;
+    incomeFields.forEach((field) => { document.querySelector(`#${field}`).value = record[field] || ''; });
+    incomeForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    document.querySelector('#expense-id').value = id;
+    expenseFields.forEach((field) => { document.querySelector(`#${field}`).value = record[field] || ''; });
+    expenseForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function deleteRevenueRecord(id) {
+  writeStore(REVENUE_CENTER_KEY, getRevenueRecords().filter((item) => item.id !== id));
+  render();
+}
+
+function recordDate(record) {
+  return record.kind === 'income' ? record.incomeDate : record.expenseDate;
+}
+
+function recordCategory(record) {
+  return record.kind === 'income' ? record.incomeRevenueType : record.expenseCategory;
+}
+
+function recordAmount(record) {
+  return asNumber(record.kind === 'income' ? record.incomeAmount : record.expenseAmount);
+}
+
+function getFilteredRevenueRecords(records) {
+  const query = revenueSearch.value.trim().toLowerCase();
+  return records.filter((record) => {
+    const haystack = [...incomeFields, ...expenseFields].map((field) => record[field]).join(' ').toLowerCase();
+    const date = recordDate(record);
+    return (!query || haystack.includes(query))
+      && (!revenueKindFilter.value || record.kind === revenueKindFilter.value)
+      && (!revenueCategoryFilter.value || recordCategory(record) === revenueCategoryFilter.value)
+      && (!revenueStartFilter.value || date >= revenueStartFilter.value)
+      && (!revenueEndFilter.value || date <= revenueEndFilter.value);
+  }).sort((a, b) => new Date(recordDate(b) || b.createdAt) - new Date(recordDate(a) || a.createdAt));
+}
+
+function updateRevenueCategoryFilter() {
+  const selected = revenueCategoryFilter.value;
+  seedSelect(revenueCategoryFilter, [...revenueTypeOptions, ...expenseCategoryOptions], 'All categories');
+  revenueCategoryFilter.value = selected;
+}
+
+function renderBarList(container, rows, emptyText) {
+  const max = Math.max(...rows.map((row) => row.value), 0);
+  container.innerHTML = rows.length ? rows.map((row) => `
+    <div class="chart-row">
+      <div class="chart-row-label"><span>${escapeHtml(row.label)}</span><strong>${formatCurrency(row.value)}</strong></div>
+      <div class="chart-track"><span style="width: ${max ? Math.max((row.value / max) * 100, 4) : 0}%"></span></div>
+    </div>`).join('') : `<p class="empty-message">${emptyText}</p>`;
+}
+
+function renderRevenueMetrics(records) {
+  const income = records.filter((record) => record.kind === 'income');
+  const expenses = records.filter((record) => record.kind === 'expense');
+  const totalRevenue = income.reduce((sum, record) => sum + recordAmount(record), 0);
+  const monthlyRevenue = income.filter((record) => isThisMonth(record.incomeDate)).reduce((sum, record) => sum + recordAmount(record), 0);
+  const totalExpenses = expenses.reduce((sum, record) => sum + recordAmount(record), 0);
+  const clients = new Set(income.map((record) => record.incomeClientName).filter(Boolean));
+  document.querySelector('#metric-total-revenue').textContent = formatCurrency(totalRevenue);
+  document.querySelector('#metric-monthly-revenue').textContent = formatCurrency(monthlyRevenue);
+  document.querySelector('#metric-total-expenses').textContent = formatCurrency(totalExpenses);
+  document.querySelector('#metric-net-profit').textContent = formatCurrency(totalRevenue - totalExpenses);
+  document.querySelector('#metric-average-client-value').textContent = formatCurrency(clients.size ? totalRevenue / clients.size : 0);
+
+  const byService = revenueTypeOptions.map((type) => ({ label: type, value: income.filter((record) => record.incomeRevenueType === type).reduce((sum, record) => sum + recordAmount(record), 0) })).filter((row) => row.value > 0);
+  renderBarList(document.querySelector('#revenue-service-chart'), byService, 'No revenue by service type yet.');
+
+  const monthly = {};
+  income.forEach((record) => {
+    if (!record.incomeDate) return;
+    const key = record.incomeDate.slice(0, 7);
+    monthly[key] = (monthly[key] || 0) + recordAmount(record);
+  });
+  const monthRows = Object.entries(monthly).sort(([a], [b]) => b.localeCompare(a)).slice(0, 6).map(([label, value]) => ({ label, value }));
+  renderBarList(document.querySelector('#monthly-revenue-report'), monthRows, 'No monthly revenue report yet.');
+}
+
+function renderRevenueCard(record) {
+  const card = document.createElement('article');
+  const isIncome = record.kind === 'income';
+  card.className = `card revenue-card ${isIncome ? 'income-card' : 'expense-card'}`;
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge ${isIncome ? 'success-badge' : 'danger-badge'}">${isIncome ? 'Income' : 'Expense'}</span>
+      <span class="badge">${escapeHtml(recordCategory(record))}</span>
+    </div>
+    <h3>${escapeHtml(isIncome ? record.incomeClientName : record.expenseVendor || 'Business expense')}</h3>
+    <p class="group">${formatCurrency(recordAmount(record))} • ${formatDate(recordDate(record))}</p>
+    <dl>
+      ${isIncome ? detail('Payment Method', record.incomePaymentMethod) : detail('Vendor', record.expenseVendor)}
+      ${detail('Notes', isIncome ? record.incomeNotes : record.expenseNotes)}
+    </dl>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editRevenueRecord(record.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteRevenueRecord(record.id));
+  return card;
+}
 
 function getCommunicationFormData() {
   return communicationFields.reduce((data, field) => {
@@ -1325,7 +1506,7 @@ function renderLeadCard(lead) {
 }
 
 
-function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications }) {
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords }) {
   const totalLeadCount = leads.length + pipelineLeads.length;
   const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
@@ -1344,7 +1525,12 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
   const closedDeals = pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const monthlyInitialFees = clients.filter((client) => isThisMonth(client.enrollmentDate || client.createdAt)).reduce((sum, client) => sum + asNumber(client.initialFee), 0);
   const monthlyRecurringRevenue = clients.filter((client) => client.paymentStatus === 'Current').reduce((sum, client) => sum + asNumber(client.monthlyFee), 0);
-  const monthlyRevenue = monthlyInitialFees + monthlyRecurringRevenue;
+  const revenueCenterIncome = revenueRecords.filter((record) => record.kind === 'income');
+  const revenueCenterExpenses = revenueRecords.filter((record) => record.kind === 'expense');
+  const revenueCenterTotalRevenue = revenueCenterIncome.reduce((sum, record) => sum + recordAmount(record), 0);
+  const revenueCenterMonthlyRevenue = revenueCenterIncome.filter((record) => isThisMonth(record.incomeDate)).reduce((sum, record) => sum + recordAmount(record), 0);
+  const revenueCenterTotalExpenses = revenueCenterExpenses.reduce((sum, record) => sum + recordAmount(record), 0);
+  const monthlyRevenue = revenueCenterIncome.length ? revenueCenterMonthlyRevenue : monthlyInitialFees + monthlyRecurringRevenue;
   const projectedRevenue = monthlyRevenue + pipelineLeads.filter((lead) => !['Enrolled', 'Active Client', 'Lost Lead'].includes(lead.pipelineStage)).reduce((sum, lead) => sum + asNumber(lead.pipelineValue), 0);
   const upcomingFollowUps = [
     ...tasks.filter((task) => task.taskStatus !== 'Completed' && daysUntil(task.taskDueDate) !== null && daysUntil(task.taskDueDate) > 0 && daysUntil(task.taskDueDate) <= 14),
@@ -1359,7 +1545,7 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
     pipeline: [ ['Leads by Stage', pipelineStages.map((stage) => `${stage}: ${pipelineLeads.filter((lead) => lead.pipelineStage === stage).length}`).join(' • ')], ['Estimated Revenue', formatCurrency(estimatedRevenue)], ['Closed Deals', closedDeals], ['Conversion Rate', formatPercent(totalLeadCount ? (closedDeals / totalLeadCount) * 100 : 0)] ],
     documents: [ ['Total Documents', documents.length], ['Pending Review', documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length], ['Uploaded Today', documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length], ['Document Clients', new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean)).size] ],
     communications: [ ['Total Communications', communications.length], ['Calls Today', communications.filter((item) => item.communicationType === 'Call' && (item.communicationDateTime || '').slice(0, 10) === todayDateString()).length], ['Follow-Ups Due', communications.filter((item) => isFollowUpDue(item.communicationFollowUpDate)).length], ['Appointments Set', communications.filter((item) => item.communicationOutcome === 'Appointment Set').length] ],
-    financial: [ ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Monthly Initial Fees Collected', formatCurrency(monthlyInitialFees)], ['Monthly Recurring Revenue', formatCurrency(monthlyRecurringRevenue)], ['Projected Revenue', formatCurrency(projectedRevenue)] ],
+    financial: [ ['Total Revenue', formatCurrency(revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue)], ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Total Expenses', formatCurrency(revenueCenterTotalExpenses)], ['Net Profit', formatCurrency((revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue) - revenueCenterTotalExpenses)] ],
   };
 }
 
@@ -1402,6 +1588,7 @@ function render() {
   const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
   const documents = readStore(DOCUMENTS_KEY);
   const communications = readStore(COMMUNICATIONS_KEY);
+  const revenueRecords = getRevenueRecords();
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1412,6 +1599,7 @@ function render() {
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
   documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
   communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
+  revenueTransactionCount.textContent = `${revenueRecords.length} transaction${revenueRecords.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1423,7 +1611,9 @@ function render() {
   renderDocumentMetrics(documents);
   renderDocumentClientCounts(documents);
   renderCommunicationMetrics(communications);
-  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications });
+  updateRevenueCategoryFilter();
+  renderRevenueMetrics(revenueRecords);
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -1434,6 +1624,7 @@ function render() {
   overdueTaskList.innerHTML = '';
   documentList.innerHTML = '';
   communicationList.innerHTML = '';
+  revenueTransactionList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -1459,6 +1650,10 @@ function render() {
   const filteredCommunications = getFilteredCommunications(communications);
   if (!filteredCommunications.length) communicationList.innerHTML = '<p class="empty-message">No communications match your current view. Add a conversation or adjust your filters.</p>';
   filteredCommunications.forEach((item) => communicationList.append(renderCommunicationCard(item)));
+
+  const filteredRevenueRecords = getFilteredRevenueRecords(revenueRecords);
+  if (!filteredRevenueRecords.length) revenueTransactionList.innerHTML = '<p class="empty-message">No revenue center transactions match your current view. Add income or expenses above.</p>';
+  filteredRevenueRecords.forEach((record) => revenueTransactionList.append(renderRevenueCard(record)));
 
   const filteredTasks = getFilteredTasks(tasks);
   const overdueTasks = filteredTasks.filter((task) => task.taskStatus === 'Overdue');
@@ -1512,6 +1707,9 @@ seedSelect(document.querySelector('#communicationOutcome'), communicationOutcome
 seedSelect(communicationContactFilter, communicationContactTypes, 'All contact types');
 seedSelect(communicationTypeFilter, communicationTypes, 'All communication types');
 seedSelect(communicationOutcomeFilter, communicationOutcomes, 'All outcomes');
+seedSelect(document.querySelector('#incomeRevenueType'), revenueTypeOptions);
+seedSelect(document.querySelector('#expenseCategory'), expenseCategoryOptions);
+seedSelect(revenueCategoryFilter, [...revenueTypeOptions, ...expenseCategoryOptions], 'All categories');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
@@ -1522,6 +1720,8 @@ mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
 documentForm.addEventListener('submit', saveDocument);
 communicationForm.addEventListener('submit', saveCommunication);
+incomeForm.addEventListener('submit', saveIncome);
+expenseForm.addEventListener('submit', saveExpense);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
@@ -1530,6 +1730,8 @@ document.querySelector('#reset-credit-intelligence-form').addEventListener('clic
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
 document.querySelector('#reset-document-form').addEventListener('click', resetDocumentForm);
 document.querySelector('#reset-communication-form').addEventListener('click', resetCommunicationForm);
+document.querySelector('#reset-income-form').addEventListener('click', resetIncomeForm);
+document.querySelector('#reset-expense-form').addEventListener('click', resetExpenseForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -1549,6 +1751,8 @@ taskSearch.addEventListener('input', render);
 documentSearch.addEventListener('input', render);
 communicationSearch.addEventListener('input', render);
 communicationDateFilter.addEventListener('change', render);
+revenueSearch.addEventListener('input', render);
+[revenueKindFilter, revenueCategoryFilter, revenueStartFilter, revenueEndFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
@@ -1557,4 +1761,6 @@ communicationDateFilter.addEventListener('change', render);
 updateCreditIntelligencePreview();
 resetDocumentForm();
 resetCommunicationForm();
+resetIncomeForm();
+resetExpenseForm();
 render();
