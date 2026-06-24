@@ -9,6 +9,7 @@ const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 const DASHBOARD_KEY = 'synergy4life.dashboard';
 const DOCUMENTS_KEY = 'synergy4life.documents';
+const COMMUNICATIONS_KEY = 'synergy4life.communications';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -55,6 +56,10 @@ const taskStatusOptions = ['Pending', 'Completed', 'Overdue'];
 const documentCategories = ['ID', 'Social Security Card', 'Utility Bill', 'Credit Report', 'Dispute Letter', 'Bureau Response', 'CFPB Complaint', 'FTC Complaint', 'Attorney Letter', 'Mortgage Documents', 'Income Documents', 'Closing Documents', 'Other'];
 const documentStatusOptions = ['Pending Review', 'Reviewed', 'Sent', 'Archived'];
 const documentFields = ['documentClientName', 'documentName', 'documentCategory', 'documentUploadDate', 'documentStatus', 'documentNotes'];
+const communicationContactTypes = ['Lead', 'Client', 'Mentee', 'Realtor Lead', 'Business Partner', 'Backend Client', 'Skool Member'];
+const communicationTypes = ['Call', 'Text', 'Email', 'Facebook Messenger', 'Instagram DM', 'Skool Message', 'Zoom', 'In Person'];
+const communicationOutcomes = ['No Answer', 'Left Voicemail', 'Follow Up Needed', 'Appointment Set', 'Enrolled', 'Closed', 'Not Interested'];
+const communicationFields = ['communicationContactName', 'communicationContactType', 'communicationType', 'communicationDateTime', 'communicationSubject', 'communicationNotes', 'communicationOutcome', 'communicationFollowUpDate'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -108,6 +113,14 @@ const documentSearch = document.querySelector('#document-search');
 const documentCategoryFilter = document.querySelector('#document-category-filter');
 const documentClientFilter = document.querySelector('#document-client-filter');
 const documentClientCounts = document.querySelector('#document-client-counts');
+const communicationForm = document.querySelector('#communication-form');
+const communicationList = document.querySelector('#communication-list');
+const communicationCount = document.querySelector('#communication-count');
+const communicationSearch = document.querySelector('#communication-search');
+const communicationContactFilter = document.querySelector('#communication-contact-filter');
+const communicationTypeFilter = document.querySelector('#communication-type-filter');
+const communicationOutcomeFilter = document.querySelector('#communication-outcome-filter');
+const communicationDateFilter = document.querySelector('#communication-date-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -118,6 +131,8 @@ const asNumber = (value) => Number(value || 0);
 const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 const formatPercent = (value) => `${Math.round(value)}%`;
 const isTaskOverdue = (task) => task.taskStatus !== 'Completed' && task.taskDueDate && task.taskDueDate < todayDateString();
+const isFollowUpDue = (value) => value && value <= todayDateString();
+const formatDateTime = (value) => value ? new Date(value).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Not set';
 
 const isThisMonth = (value) => {
   if (!value) return false;
@@ -140,6 +155,91 @@ function seedSelect(select, values, allLabel = '') {
 
 
 
+function getCommunicationFormData() {
+  return communicationFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetCommunicationForm() {
+  communicationForm.reset();
+  document.querySelector('#communication-id').value = '';
+  document.querySelector('#communicationDateTime').value = new Date().toISOString().slice(0, 16);
+  document.querySelector('#communicationContactType').value = 'Lead';
+  document.querySelector('#communicationType').value = 'Call';
+  document.querySelector('#communicationOutcome').value = 'Follow Up Needed';
+}
+
+function saveCommunication(event) {
+  event.preventDefault();
+  const communications = readStore(COMMUNICATIONS_KEY);
+  const id = document.querySelector('#communication-id').value || crypto.randomUUID();
+  const existing = communications.findIndex((item) => item.id === id);
+  const record = { id, ...getCommunicationFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? communications[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) communications[existing] = record;
+  else communications.unshift(record);
+  writeStore(COMMUNICATIONS_KEY, communications);
+  resetCommunicationForm();
+  render();
+}
+
+function editCommunication(id) {
+  const communication = readStore(COMMUNICATIONS_KEY).find((item) => item.id === id);
+  if (!communication) return;
+  document.querySelector('#communication-id').value = id;
+  communicationFields.forEach((field) => { document.querySelector(`#${field}`).value = communication[field] || ''; });
+  document.querySelector('[data-tab="communications"]').click();
+  communicationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteCommunication(id) {
+  writeStore(COMMUNICATIONS_KEY, readStore(COMMUNICATIONS_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredCommunications(communications) {
+  const query = communicationSearch.value.trim().toLowerCase();
+  return communications.filter((item) => {
+    const haystack = communicationFields.map((field) => item[field]).join(' ').toLowerCase();
+    return (!query || haystack.includes(query))
+      && (!communicationContactFilter.value || item.communicationContactType === communicationContactFilter.value)
+      && (!communicationTypeFilter.value || item.communicationType === communicationTypeFilter.value)
+      && (!communicationOutcomeFilter.value || item.communicationOutcome === communicationOutcomeFilter.value)
+      && (!communicationDateFilter.value || (item.communicationDateTime || '').slice(0, 10) === communicationDateFilter.value);
+  }).sort((a, b) => new Date(b.communicationDateTime || b.createdAt) - new Date(a.communicationDateTime || a.createdAt));
+}
+
+function renderCommunicationMetrics(communications) {
+  document.querySelector('#metric-communications-total').textContent = communications.length;
+  document.querySelector('#metric-communications-calls-today').textContent = communications.filter((item) => item.communicationType === 'Call' && (item.communicationDateTime || '').slice(0, 10) === todayDateString()).length;
+  document.querySelector('#metric-communications-followups').textContent = communications.filter((item) => isFollowUpDue(item.communicationFollowUpDate)).length;
+  document.querySelector('#metric-communications-appointments').textContent = communications.filter((item) => item.communicationOutcome === 'Appointment Set').length;
+  document.querySelector('#metric-communications-enrollments').textContent = communications.filter((item) => ['Enrolled', 'Closed'].includes(item.communicationOutcome)).length;
+}
+
+function renderCommunicationCard(item) {
+  const card = document.createElement('article');
+  const due = isFollowUpDue(item.communicationFollowUpDate);
+  card.className = `card communication-card${due ? ' follow-up-due' : ''}`;
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge">${escapeHtml(item.communicationContactType)}</span>
+      <span class="badge">${escapeHtml(item.communicationType)}</span>
+      <span class="badge ${due ? 'danger-badge' : ''}">${due ? 'Follow-up due' : escapeHtml(item.communicationOutcome)}</span>
+    </div>
+    <h3>${escapeHtml(item.communicationContactName)}</h3>
+    <p class="group">${escapeHtml(item.communicationSubject)} • ${formatDateTime(item.communicationDateTime)}</p>
+    <dl>
+      ${detail('Outcome', item.communicationOutcome)}
+      ${detail('Next Follow-Up Date', formatDate(item.communicationFollowUpDate))}
+      ${detail('Notes', item.communicationNotes)}
+    </dl>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editCommunication(item.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteCommunication(item.id));
+  return card;
+}
 
 function getCreditIntelligenceFormData() {
   return creditIntelligenceFields.reduce((data, field) => {
@@ -1225,7 +1325,7 @@ function renderLeadCard(lead) {
 }
 
 
-function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents }) {
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications }) {
   const totalLeadCount = leads.length + pipelineLeads.length;
   const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
@@ -1258,6 +1358,7 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
     creditFiles: [ ['Total Credit Files', creditFiles.length], ['Average Client Score', Math.round(average(creditScores))], ['Average Readiness Score', Math.round(average(readinessScores))], ['High Risk Profiles', highRiskProfiles] ],
     pipeline: [ ['Leads by Stage', pipelineStages.map((stage) => `${stage}: ${pipelineLeads.filter((lead) => lead.pipelineStage === stage).length}`).join(' • ')], ['Estimated Revenue', formatCurrency(estimatedRevenue)], ['Closed Deals', closedDeals], ['Conversion Rate', formatPercent(totalLeadCount ? (closedDeals / totalLeadCount) * 100 : 0)] ],
     documents: [ ['Total Documents', documents.length], ['Pending Review', documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length], ['Uploaded Today', documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length], ['Document Clients', new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean)).size] ],
+    communications: [ ['Total Communications', communications.length], ['Calls Today', communications.filter((item) => item.communicationType === 'Call' && (item.communicationDateTime || '').slice(0, 10) === todayDateString()).length], ['Follow-Ups Due', communications.filter((item) => isFollowUpDue(item.communicationFollowUpDate)).length], ['Appointments Set', communications.filter((item) => item.communicationOutcome === 'Appointment Set').length] ],
     financial: [ ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Monthly Initial Fees Collected', formatCurrency(monthlyInitialFees)], ['Monthly Recurring Revenue', formatCurrency(monthlyRecurringRevenue)], ['Projected Revenue', formatCurrency(projectedRevenue)] ],
   };
 }
@@ -1276,7 +1377,7 @@ function renderDashboard(data) {
   const metrics = calculateDashboardMetrics(data);
   const groups = [
     ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks],
-    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
+    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['COMMUNICATIONS', metrics.communications], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
   ];
   dashboardSections.innerHTML = groups.map(([title, items]) => `
     <section class="dashboard-widget ${title === 'PIPELINE' || title === 'FINANCIAL METRICS' ? 'wide-widget' : ''}">
@@ -1300,6 +1401,7 @@ function render() {
   const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
   const documents = readStore(DOCUMENTS_KEY);
+  const communications = readStore(COMMUNICATIONS_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1309,6 +1411,7 @@ function render() {
   creditIntelligenceCount.textContent = `${creditIntelligence.length} report${creditIntelligence.length === 1 ? '' : 's'}`;
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
   documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
+  communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1319,7 +1422,8 @@ function render() {
   updateDocumentClientFilter(documents);
   renderDocumentMetrics(documents);
   renderDocumentClientCounts(documents);
-  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents });
+  renderCommunicationMetrics(communications);
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -1329,6 +1433,7 @@ function render() {
   mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
   documentList.innerHTML = '';
+  communicationList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -1350,6 +1455,10 @@ function render() {
   const filteredDocuments = getFilteredDocuments(documents);
   if (!filteredDocuments.length) documentList.innerHTML = '<p class="empty-message">No documents match your current view. Upload a document or adjust your filters.</p>';
   filteredDocuments.forEach((documentRecord) => documentList.append(renderDocumentCard(documentRecord)));
+
+  const filteredCommunications = getFilteredCommunications(communications);
+  if (!filteredCommunications.length) communicationList.innerHTML = '<p class="empty-message">No communications match your current view. Add a conversation or adjust your filters.</p>';
+  filteredCommunications.forEach((item) => communicationList.append(renderCommunicationCard(item)));
 
   const filteredTasks = getFilteredTasks(tasks);
   const overdueTasks = filteredTasks.filter((task) => task.taskStatus === 'Overdue');
@@ -1397,6 +1506,12 @@ seedSelect(taskSourceFilter, taskSourceOptions, 'All source modules');
 seedSelect(document.querySelector('#documentCategory'), documentCategories);
 seedSelect(document.querySelector('#documentStatus'), documentStatusOptions);
 seedSelect(documentCategoryFilter, documentCategories, 'All categories');
+seedSelect(document.querySelector('#communicationContactType'), communicationContactTypes);
+seedSelect(document.querySelector('#communicationType'), communicationTypes);
+seedSelect(document.querySelector('#communicationOutcome'), communicationOutcomes);
+seedSelect(communicationContactFilter, communicationContactTypes, 'All contact types');
+seedSelect(communicationTypeFilter, communicationTypes, 'All communication types');
+seedSelect(communicationOutcomeFilter, communicationOutcomes, 'All outcomes');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
@@ -1406,6 +1521,7 @@ creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
 documentForm.addEventListener('submit', saveDocument);
+communicationForm.addEventListener('submit', saveCommunication);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
@@ -1413,6 +1529,7 @@ document.querySelector('#reset-credit-file-form').addEventListener('click', rese
 document.querySelector('#reset-credit-intelligence-form').addEventListener('click', resetCreditIntelligenceForm);
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
 document.querySelector('#reset-document-form').addEventListener('click', resetDocumentForm);
+document.querySelector('#reset-communication-form').addEventListener('click', resetCommunicationForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -1430,10 +1547,14 @@ pipelineStageFilter.addEventListener('change', render);
 creditFileSearch.addEventListener('input', render);
 taskSearch.addEventListener('input', render);
 documentSearch.addEventListener('input', render);
+communicationSearch.addEventListener('input', render);
+communicationDateFilter.addEventListener('change', render);
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
+[communicationContactFilter, communicationTypeFilter, communicationOutcomeFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 updateCreditIntelligencePreview();
 resetDocumentForm();
+resetCommunicationForm();
 render();

@@ -437,3 +437,53 @@ button:disabled {
   .document-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .document-category-metric { grid-column: 1 / -1; }
 }
+
+.communication-metrics .metric-card { min-height: 88px; }
+.communication-controls { position: sticky; top: 0; z-index: 2; }
+.communication-timeline {
+  display: grid;
+  gap: 1rem;
+  position: relative;
+}
+.communication-card {
+  position: relative;
+  border-left: 5px solid var(--brand);
+}
+.communication-card::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 1.35rem;
+  width: 14px;
+  height: 14px;
+  border: 3px solid white;
+  border-radius: 999px;
+  background: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand);
+}
+.communication-card.follow-up-due {
+  border-color: #fca5a5;
+  background: #fffafa;
+  box-shadow: 0 14px 35px rgba(220, 38, 38, .14);
+}
+.communication-card.follow-up-due::before {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger);
+}
+.danger-badge {
+  background: #fee2e2;
+  color: var(--danger);
+}
+@media (min-width: 720px) {
+  .communication-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .communication-timeline { padding-left: 1rem; }
+  .communication-timeline::before {
+    content: "";
+    position: absolute;
+    left: .35rem;
+    top: .25rem;
+    bottom: .25rem;
+    width: 2px;
+    background: var(--line);
+  }
+}
