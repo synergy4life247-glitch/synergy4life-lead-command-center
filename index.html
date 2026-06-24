@@ -20,6 +20,7 @@
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+      <button class="tab" type="button" data-tab="documents">Documents</button>
       <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
@@ -281,6 +282,54 @@
         <div id="credit-file-list" class="card-grid empty-state"></div>
       </section>
 
+      <section id="documents" class="panel" aria-labelledby="documents-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Document vault</p>
+            <h2 id="documents-heading">Documents</h2>
+          </div>
+          <span id="document-count" class="count-pill">0 documents</span>
+        </div>
+
+        <div class="metrics-grid document-metrics" aria-label="Document dashboard metrics">
+          <article class="metric-card"><span>Total Documents</span><strong id="metric-documents-total">0</strong></article>
+          <article class="metric-card"><span>Pending Review</span><strong id="metric-documents-pending">0</strong></article>
+          <article class="metric-card"><span>Uploaded Today</span><strong id="metric-documents-today">0</strong></article>
+          <article class="metric-card document-category-metric"><span>Documents by Category</span><strong id="metric-documents-category">—</strong></article>
+        </div>
+
+        <form id="document-form" class="tracker-form document-form">
+          <input type="hidden" id="document-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="documentClientName" name="documentClientName" placeholder="Jane Smith" required /></label>
+            <label>Document Name<input id="documentName" name="documentName" placeholder="Driver license front" required /></label>
+            <label>Category<select id="documentCategory" name="documentCategory"></select></label>
+            <label>Upload Date<input id="documentUploadDate" name="documentUploadDate" type="date" required /></label>
+            <label>Status<select id="documentStatus" name="documentStatus"></select></label>
+            <label>Upload Document<input id="documentFile" name="documentFile" type="file" /></label>
+          </div>
+          <label>Notes<textarea id="documentNotes" name="documentNotes" placeholder="What this document supports, review notes, or delivery history"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Document</button>
+            <button id="reset-document-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel document-controls">
+          <label>Search Documents<input id="document-search" placeholder="Search client, document name, category, status, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Category<select id="document-category-filter"><option value="">All categories</option></select></label>
+            <label>Filter by Client<select id="document-client-filter"><option value="">All clients</option></select></label>
+          </div>
+        </div>
+
+        <section class="dashboard-widget document-client-widget" aria-labelledby="document-client-counts-heading">
+          <div class="dashboard-widget-header"><h3 id="document-client-counts-heading">Document Count by Client</h3></div>
+          <div id="document-client-counts" class="document-client-counts"></div>
+        </section>
+
+        <div id="document-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
 
       <section id="credit-intelligence" class="panel" aria-labelledby="credit-intelligence-heading">
         <div class="section-header">
