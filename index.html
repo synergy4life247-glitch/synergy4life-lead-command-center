@@ -26,6 +26,7 @@
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="communications">Communications</button>
       <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
+      <button class="tab" type="button" data-tab="team">Team</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -630,6 +631,63 @@
         </div>
 
         <div id="revenue-transaction-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
+
+      <section id="team" class="panel" aria-labelledby="team-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">People operations</p>
+            <h2 id="team-heading">Team & VA Management</h2>
+          </div>
+          <span id="team-count" class="count-pill">0 team members</span>
+        </div>
+
+        <div class="metrics-grid team-metrics" aria-label="Team dashboard metrics">
+          <article class="metric-card"><span>Total Team Members</span><strong id="metric-team-total">0</strong></article>
+          <article class="metric-card"><span>Active Team Members</span><strong id="metric-team-active">0</strong></article>
+          <article class="metric-card"><span>Total Files Completed</span><strong id="metric-team-files">0</strong></article>
+          <article class="metric-card"><span>Total Sales Closed</span><strong id="metric-team-sales">0</strong></article>
+          <article class="metric-card"><span>Team Productivity Score</span><strong id="metric-team-productivity">0</strong></article>
+        </div>
+
+        <form id="team-form" class="tracker-form">
+          <input type="hidden" id="team-id" />
+          <div class="form-grid">
+            <label>Full Name<input id="teamFullName" name="teamFullName" placeholder="Alex Johnson" required /></label>
+            <label>Role<select id="teamRole" name="teamRole"></select></label>
+            <label>Email<input id="teamEmail" name="teamEmail" type="email" placeholder="alex@email.com" /></label>
+            <label>Phone<input id="teamPhone" name="teamPhone" type="tel" placeholder="(555) 123-4567" /></label>
+            <label>Start Date<input id="teamStartDate" name="teamStartDate" type="date" /></label>
+            <label>Status<select id="teamStatus" name="teamStatus"></select></label>
+            <label>Pay Type<select id="teamPayType" name="teamPayType"></select></label>
+            <label>Pay Rate<input id="teamPayRate" name="teamPayRate" type="number" min="0" step="0.01" placeholder="25" /></label>
+            <label>Files Completed<input id="teamFilesCompleted" name="teamFilesCompleted" type="number" min="0" step="1" placeholder="12" /></label>
+            <label>Leads Contacted<input id="teamLeadsContacted" name="teamLeadsContacted" type="number" min="0" step="1" placeholder="50" /></label>
+            <label>Sales Closed<input id="teamSalesClosed" name="teamSalesClosed" type="number" min="0" step="1" placeholder="4" /></label>
+            <label>Tasks Completed<input id="teamTasksCompleted" name="teamTasksCompleted" type="number" min="0" step="1" placeholder="35" /></label>
+            <label>Last Activity Date<input id="teamLastActivityDate" name="teamLastActivityDate" type="date" /></label>
+          </div>
+          <label>Notes<textarea id="teamNotes" name="teamNotes" placeholder="Responsibilities, training notes, strengths, coverage, payroll notes"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Team Member</button>
+            <button id="reset-team-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel team-controls">
+          <label>Search Team Members<input id="team-search" placeholder="Search name, role, email, phone, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Role<select id="team-role-filter"><option value="">All roles</option></select></label>
+            <label>Filter by Status<select id="team-status-filter"><option value="">All statuses</option></select></label>
+          </div>
+        </div>
+
+        <section class="dashboard-widget team-ranking-widget" aria-labelledby="team-ranking-heading">
+          <div class="dashboard-widget-header"><h3 id="team-ranking-heading">Productivity Rankings</h3></div>
+          <div id="team-rankings" class="chart-list" aria-live="polite"></div>
+        </section>
+
+        <div id="team-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
