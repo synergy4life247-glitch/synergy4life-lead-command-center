@@ -27,6 +27,7 @@
       <button class="tab" type="button" data-tab="communications">Communications</button>
       <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
       <button class="tab" type="button" data-tab="team">Team</button>
+      <button class="tab" type="button" data-tab="content">Content</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -688,6 +689,68 @@
         </section>
 
         <div id="team-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
+
+
+      <section id="content" class="panel" aria-labelledby="content-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Marketing Content Center</p>
+            <h2 id="content-heading">Content</h2>
+          </div>
+          <span id="content-count" class="count-pill">0 content items</span>
+        </div>
+
+        <div class="metrics-grid content-metrics" aria-label="Content dashboard metrics">
+          <article class="metric-card"><span>Total Ideas</span><strong id="metric-content-total">0</strong></article>
+          <article class="metric-card"><span>Ready / Scheduled</span><strong id="metric-content-ready">0</strong></article>
+          <article class="metric-card"><span>Posted This Month</span><strong id="metric-content-posted-month">0</strong></article>
+          <article class="metric-card"><span>Idea Bank</span><strong id="metric-content-ideas">0</strong></article>
+        </div>
+
+        <form id="content-form" class="tracker-form content-form">
+          <input type="hidden" id="content-id" />
+          <div class="form-grid">
+            <label>Content Title<input id="contentTitle" name="contentTitle" placeholder="5 credit myths keeping renters stuck" required /></label>
+            <label>Platform<select id="contentPlatform" name="contentPlatform"></select></label>
+            <label>Content Type<select id="contentType" name="contentType"></select></label>
+            <label>Topic<input id="contentTopic" name="contentTopic" placeholder="Credit, Skool, real estate, mentorship" /></label>
+            <label>Target Audience<input id="contentAudience" name="contentAudience" placeholder="Renters, builders, realtors, moms" /></label>
+            <label>CTA<select id="contentCta" name="contentCta"></select></label>
+            <label>Status<select id="contentStatus" name="contentStatus"></select></label>
+            <label>Scheduled Date<input id="contentScheduledDate" name="contentScheduledDate" type="date" /></label>
+            <label>Posted Date<input id="contentPostedDate" name="contentPostedDate" type="date" /></label>
+          </div>
+          <label>Hook<textarea id="contentHook" name="contentHook" placeholder="Stop scrolling if your credit score is blocking your next move..."></textarea></label>
+          <label>Caption/Draft<textarea id="contentDraft" name="contentDraft" placeholder="Draft the caption, Skool post, reel script, or email copy here"></textarea></label>
+          <label>Performance Notes<textarea id="contentPerformanceNotes" name="contentPerformanceNotes" placeholder="Views, comments, saves, DMs, booked calls, lessons learned"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Content</button>
+            <button id="reset-content-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel content-controls">
+          <label>Search Content<input id="content-search" placeholder="Search title, topic, audience, hook, draft, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Platform<select id="content-platform-filter"><option value="">All platforms</option></select></label>
+            <label>Filter by Type<select id="content-type-filter"><option value="">All types</option></select></label>
+            <label>Filter by CTA<select id="content-cta-filter"><option value="">All CTAs</option></select></label>
+            <label>Filter by Status<select id="content-status-filter"><option value="">All statuses</option></select></label>
+          </div>
+        </div>
+
+        <section class="dashboard-widget content-calendar-widget" aria-labelledby="content-calendar-heading">
+          <div class="dashboard-widget-header"><h3 id="content-calendar-heading">Content Calendar View</h3></div>
+          <div id="content-calendar" class="content-calendar" aria-live="polite"></div>
+        </section>
+
+        <section class="dashboard-widget content-idea-widget" aria-labelledby="content-idea-heading">
+          <div class="dashboard-widget-header"><h3 id="content-idea-heading">Content Idea Bank</h3></div>
+          <div id="content-idea-bank" class="card-grid empty-state" aria-live="polite"></div>
+        </section>
+
+        <div id="content-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">

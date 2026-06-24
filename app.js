@@ -12,6 +12,7 @@ const DOCUMENTS_KEY = 'synergy4life.documents';
 const COMMUNICATIONS_KEY = 'synergy4life.communications';
 const REVENUE_CENTER_KEY = 'synergy4life.revenueCenter';
 const TEAM_KEY = 'synergy4life.teamMembers';
+const CONTENT_KEY = 'synergy4life.contentCenter';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -69,6 +70,11 @@ const expenseFields = ['expenseDate', 'expenseCategory', 'expenseAmount', 'expen
 const teamRoleOptions = ['Virtual Assistant', 'Dispute Processor', 'Sales Representative', 'Moderator', 'Admin', 'Realtor Partner', 'Backend Processor', 'Mentor', 'Other'];
 const teamStatusOptions = ['Active', 'Inactive', 'Training', 'On Leave'];
 const teamPayTypeOptions = ['Hourly', 'Salary', 'Per File', 'Commission', 'Contractor'];
+const contentPlatformOptions = ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'Skool', 'LinkedIn', 'Email', 'Other'];
+const contentTypeOptions = ['Educational Post', 'Reel', 'Story', 'Group Reply', 'Skool Post', 'Testimonial', 'Promo', 'Live Training', 'Builder Tour', 'Credit Tip'];
+const contentCtaOptions = ['Comment START', 'Comment AUDIT', 'Comment SKOOL', 'Book Call', 'DM Me', 'Join Skool', 'Enroll', 'Mentorship', 'Credit Repair', 'Real Estate'];
+const contentStatusOptions = ['Idea', 'Drafting', 'Ready', 'Scheduled', 'Posted', 'Repurpose', 'Archived'];
+const contentFields = ['contentTitle', 'contentPlatform', 'contentType', 'contentTopic', 'contentAudience', 'contentHook', 'contentDraft', 'contentCta', 'contentStatus', 'contentScheduledDate', 'contentPostedDate', 'contentPerformanceNotes'];
 const teamFields = ['teamFullName', 'teamRole', 'teamEmail', 'teamPhone', 'teamStartDate', 'teamStatus', 'teamPayType', 'teamPayRate', 'teamNotes', 'teamFilesCompleted', 'teamLeadsContacted', 'teamSalesClosed', 'teamTasksCompleted', 'teamLastActivityDate'];
 
 const form = document.querySelector('#conversation-form');
@@ -147,6 +153,16 @@ const teamSearch = document.querySelector('#team-search');
 const teamRoleFilter = document.querySelector('#team-role-filter');
 const teamStatusFilter = document.querySelector('#team-status-filter');
 const teamRankings = document.querySelector('#team-rankings');
+const contentForm = document.querySelector('#content-form');
+const contentList = document.querySelector('#content-list');
+const contentCount = document.querySelector('#content-count');
+const contentSearch = document.querySelector('#content-search');
+const contentPlatformFilter = document.querySelector('#content-platform-filter');
+const contentTypeFilter = document.querySelector('#content-type-filter');
+const contentCtaFilter = document.querySelector('#content-cta-filter');
+const contentStatusFilter = document.querySelector('#content-status-filter');
+const contentCalendar = document.querySelector('#content-calendar');
+const contentIdeaBank = document.querySelector('#content-idea-bank');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -181,6 +197,110 @@ function seedSelect(select, values, allLabel = '') {
 
 
 
+
+
+function getContentItems() {
+  const items = readStore(CONTENT_KEY);
+  return Array.isArray(items) ? items : [];
+}
+
+function getContentFormData() {
+  return contentFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetContentForm() {
+  contentForm.reset();
+  document.querySelector('#content-id').value = '';
+  document.querySelector('#contentPlatform').value = 'Facebook';
+  document.querySelector('#contentType').value = 'Educational Post';
+  document.querySelector('#contentCta').value = 'Comment START';
+  document.querySelector('#contentStatus').value = 'Idea';
+}
+
+function saveContent(event) {
+  event.preventDefault();
+  const items = getContentItems();
+  const id = document.querySelector('#content-id').value || crypto.randomUUID();
+  const existing = items.findIndex((item) => item.id === id);
+  const record = { id, ...getContentFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? items[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) items[existing] = record;
+  else items.unshift(record);
+  writeStore(CONTENT_KEY, items);
+  resetContentForm();
+  render();
+}
+
+function editContent(id) {
+  const item = getContentItems().find((record) => record.id === id);
+  if (!item) return;
+  document.querySelector('#content-id').value = item.id;
+  contentFields.forEach((field) => { document.querySelector(`#${field}`).value = item[field] || ''; });
+  document.querySelector('[data-tab="content"]').click();
+  contentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteContent(id) {
+  writeStore(CONTENT_KEY, getContentItems().filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredContent(items) {
+  const query = contentSearch.value.trim().toLowerCase();
+  return items.filter((item) => {
+    const haystack = contentFields.map((field) => item[field]).join(' ').toLowerCase();
+    return (!query || haystack.includes(query))
+      && (!contentPlatformFilter.value || item.contentPlatform === contentPlatformFilter.value)
+      && (!contentTypeFilter.value || item.contentType === contentTypeFilter.value)
+      && (!contentCtaFilter.value || item.contentCta === contentCtaFilter.value)
+      && (!contentStatusFilter.value || item.contentStatus === contentStatusFilter.value);
+  }).sort((a, b) => new Date(b.contentScheduledDate || b.contentPostedDate || b.updatedAt || b.createdAt) - new Date(a.contentScheduledDate || a.contentPostedDate || a.updatedAt || a.createdAt));
+}
+
+function renderContentMetrics(items) {
+  document.querySelector('#metric-content-total').textContent = items.length;
+  document.querySelector('#metric-content-ready').textContent = items.filter((item) => ['Ready', 'Scheduled'].includes(item.contentStatus)).length;
+  document.querySelector('#metric-content-posted-month').textContent = items.filter((item) => item.contentStatus === 'Posted' && isThisMonth(item.contentPostedDate)).length;
+  document.querySelector('#metric-content-ideas').textContent = items.filter((item) => item.contentStatus === 'Idea').length;
+}
+
+function renderContentCalendar(items) {
+  const scheduled = items.filter((item) => item.contentScheduledDate || item.contentPostedDate)
+    .sort((a, b) => new Date(a.contentScheduledDate || a.contentPostedDate) - new Date(b.contentScheduledDate || b.contentPostedDate))
+    .slice(0, 12);
+  contentCalendar.innerHTML = scheduled.length ? scheduled.map((item) => `
+    <article class="calendar-item">
+      <time>${formatDate(item.contentScheduledDate || item.contentPostedDate)}</time>
+      <div><strong>${escapeHtml(item.contentTitle || 'Untitled content')}</strong><span>${escapeHtml(item.contentPlatform || 'Platform')} • ${escapeHtml(item.contentType || 'Type')} • ${escapeHtml(item.contentStatus || 'Status')}</span></div>
+    </article>`).join('') : '<p class="empty-message">No scheduled or posted content yet. Add scheduled dates to build your calendar.</p>';
+}
+
+function renderContentCard(item, compact = false) {
+  const card = document.createElement('article');
+  card.className = `card content-card status-${(item.contentStatus || '').toLowerCase().replace(/\s+/g, '-')}`;
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge">${escapeHtml(item.contentPlatform || 'Platform')}</span>
+      <span class="badge">${escapeHtml(item.contentType || 'Type')}</span>
+      <span class="badge ${item.contentStatus === 'Posted' ? 'success-badge' : ''}">${escapeHtml(item.contentStatus || 'Status')}</span>
+    </div>
+    <h3>${escapeHtml(item.contentTitle || 'Untitled content')}</h3>
+    <p class="group">${escapeHtml(item.contentTopic || 'No topic')} • ${escapeHtml(item.contentAudience || 'No audience')}</p>
+    <dl>
+      ${detail('Hook', item.contentHook)}
+      ${compact ? '' : detail('Caption/Draft', item.contentDraft)}
+      ${detail('CTA', item.contentCta)}
+      ${detail('Scheduled Date', formatDate(item.contentScheduledDate))}
+      ${detail('Posted Date', formatDate(item.contentPostedDate))}
+      ${compact ? '' : detail('Performance Notes', item.contentPerformanceNotes)}
+    </dl>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editContent(item.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteContent(item.id));
+  return card;
+}
 
 function getTeamMembers() {
   const members = readStore(TEAM_KEY);
@@ -1710,6 +1830,7 @@ function render() {
   const communications = readStore(COMMUNICATIONS_KEY);
   const revenueRecords = getRevenueRecords();
   const teamMembers = getTeamMembers();
+  const contentItems = getContentItems();
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1722,6 +1843,7 @@ function render() {
   communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
   revenueTransactionCount.textContent = `${revenueRecords.length} transaction${revenueRecords.length === 1 ? '' : 's'}`;
   teamCount.textContent = `${teamMembers.length} team member${teamMembers.length === 1 ? '' : 's'}`;
+  contentCount.textContent = `${contentItems.length} content item${contentItems.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1736,6 +1858,8 @@ function render() {
   updateRevenueCategoryFilter();
   renderRevenueMetrics(revenueRecords);
   renderTeamMetrics(teamMembers);
+  renderContentMetrics(contentItems);
+  renderContentCalendar(contentItems);
   renderTeamRankings(teamMembers);
   renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers });
   conversationList.innerHTML = '';
@@ -1750,6 +1874,8 @@ function render() {
   communicationList.innerHTML = '';
   revenueTransactionList.innerHTML = '';
   teamList.innerHTML = '';
+  contentList.innerHTML = '';
+  contentIdeaBank.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -1775,6 +1901,13 @@ function render() {
   const filteredCommunications = getFilteredCommunications(communications);
   if (!filteredCommunications.length) communicationList.innerHTML = '<p class="empty-message">No communications match your current view. Add a conversation or adjust your filters.</p>';
   filteredCommunications.forEach((item) => communicationList.append(renderCommunicationCard(item)));
+
+  const filteredContentItems = getFilteredContent(contentItems);
+  const ideaItems = getFilteredContent(contentItems.filter((item) => item.contentStatus === 'Idea'));
+  if (!ideaItems.length) contentIdeaBank.innerHTML = '<p class="empty-message">No content ideas match your current view. Capture an idea above to start the bank.</p>';
+  ideaItems.forEach((item) => contentIdeaBank.append(renderContentCard(item, true)));
+  if (!filteredContentItems.length) contentList.innerHTML = '<p class="empty-message">No content records match your current view. Add content or adjust your filters.</p>';
+  filteredContentItems.forEach((item) => contentList.append(renderContentCard(item)));
 
   const filteredTeamMembers = getFilteredTeamMembers(teamMembers);
   if (!filteredTeamMembers.length) teamList.innerHTML = '<p class="empty-message">No team members match your current view. Add a team member or adjust your filters.</p>';
@@ -1839,6 +1972,14 @@ seedSelect(communicationOutcomeFilter, communicationOutcomes, 'All outcomes');
 seedSelect(document.querySelector('#incomeRevenueType'), revenueTypeOptions);
 seedSelect(document.querySelector('#expenseCategory'), expenseCategoryOptions);
 seedSelect(revenueCategoryFilter, [...revenueTypeOptions, ...expenseCategoryOptions], 'All categories');
+seedSelect(document.querySelector('#contentPlatform'), contentPlatformOptions);
+seedSelect(document.querySelector('#contentType'), contentTypeOptions);
+seedSelect(document.querySelector('#contentCta'), contentCtaOptions);
+seedSelect(document.querySelector('#contentStatus'), contentStatusOptions);
+seedSelect(contentPlatformFilter, contentPlatformOptions, 'All platforms');
+seedSelect(contentTypeFilter, contentTypeOptions, 'All types');
+seedSelect(contentCtaFilter, contentCtaOptions, 'All CTAs');
+seedSelect(contentStatusFilter, contentStatusOptions, 'All statuses');
 seedSelect(document.querySelector('#teamRole'), teamRoleOptions);
 seedSelect(document.querySelector('#teamStatus'), teamStatusOptions);
 seedSelect(document.querySelector('#teamPayType'), teamPayTypeOptions);
@@ -1857,6 +1998,7 @@ communicationForm.addEventListener('submit', saveCommunication);
 incomeForm.addEventListener('submit', saveIncome);
 expenseForm.addEventListener('submit', saveExpense);
 teamForm.addEventListener('submit', saveTeamMember);
+contentForm.addEventListener('submit', saveContent);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
@@ -1868,6 +2010,7 @@ document.querySelector('#reset-communication-form').addEventListener('click', re
 document.querySelector('#reset-income-form').addEventListener('click', resetIncomeForm);
 document.querySelector('#reset-expense-form').addEventListener('click', resetExpenseForm);
 document.querySelector('#reset-team-form').addEventListener('click', resetTeamForm);
+document.querySelector('#reset-content-form').addEventListener('click', resetContentForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -1890,7 +2033,9 @@ communicationDateFilter.addEventListener('change', render);
 revenueSearch.addEventListener('input', render);
 [revenueKindFilter, revenueCategoryFilter, revenueStartFilter, revenueEndFilter].forEach((control) => control.addEventListener('change', render));
 teamSearch.addEventListener('input', render);
+contentSearch.addEventListener('input', render);
 [teamRoleFilter, teamStatusFilter].forEach((control) => control.addEventListener('change', render));
+[contentPlatformFilter, contentTypeFilter, contentCtaFilter, contentStatusFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
@@ -1902,4 +2047,5 @@ resetCommunicationForm();
 resetIncomeForm();
 resetExpenseForm();
 resetTeamForm();
+resetContentForm();
 render();
