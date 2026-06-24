@@ -3,6 +3,7 @@ const LEADS_KEY = 'synergy4life.leads';
 const CLIENTS_KEY = 'synergy4life.clients';
 const PIPELINE_KEY = 'synergy4life.pipeline';
 const PIPELINE_DELETED_KEY = 'synergy4life.pipeline.deletedSourceLeads';
+const CREDIT_FILES_KEY = 'synergy4life.creditFiles';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -18,6 +19,15 @@ const clientFields = [
 const clientGoalOptions = ['Home', 'Auto', 'Business Funding', 'Personal Credit'];
 const paymentStatusOptions = ['Current', 'Past Due', 'Paid in Full', 'Paused'];
 const pipelineStages = ['New Lead', 'Contacted', 'Credit Analysis Sent', 'Follow Up', 'Enrolled', 'Active Client', 'Lost Lead'];
+const creditGoalOptions = ['Mortgage', 'Auto', 'Personal', 'Business'];
+const creditStatusOptions = ['Active', 'Awaiting Documents', 'In Dispute', 'Escalated', 'Complete', 'Paused'];
+const disputeStageOptions = ['Round 1', 'Round 2', 'Round 3', 'CFPB', 'Attorney Escalation'];
+const creditFileFields = [
+  'creditClientName', 'creditEmail', 'creditPhone', 'creditGoal', 'scoreEq', 'scoreEx', 'scoreTu',
+  'creditTargetScore', 'creditEnrollmentDate', 'creditStatus', 'disputeStage', 'creditFollowUpDate',
+  'creditMortgageReady', 'negativeAccounts', 'inquiries', 'latePayments', 'collections',
+  'chargeOffs', 'repossessions', 'bankruptcy', 'disputeRoundNotes'
+];
 const pipelineFields = ['pipelineName', 'pipelinePhone', 'pipelineEmail', 'pipelineSource', 'pipelineStage', 'pipelineValue', 'pipelineNotes'];
 
 const form = document.querySelector('#conversation-form');
@@ -38,6 +48,14 @@ const pipelineCount = document.querySelector('#pipeline-count');
 const pipelineSearch = document.querySelector('#pipeline-search');
 const pipelineStageFilter = document.querySelector('#pipeline-stage-filter');
 const pipelineSourceFilter = document.querySelector('#pipeline-source-filter');
+const creditFileForm = document.querySelector('#credit-file-form');
+const creditFileList = document.querySelector('#credit-file-list');
+const creditFileCount = document.querySelector('#credit-file-count');
+const creditFileSearch = document.querySelector('#credit-file-search');
+const creditGoalFilter = document.querySelector('#credit-goal-filter');
+const creditStatusFilter = document.querySelector('#credit-status-filter');
+const creditStageFilter = document.querySelector('#credit-stage-filter');
+const creditMortgageFilter = document.querySelector('#credit-mortgage-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -208,6 +226,120 @@ function renderPipelineBoard(leads) {
     stageLeads.forEach((lead) => column.append(renderPipelineCard(lead)));
     pipelineBoard.append(column);
   });
+}
+
+function getCreditFileFormData() {
+  return creditFileFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetCreditFileForm() {
+  creditFileForm.reset();
+  document.querySelector('#credit-file-id').value = '';
+  document.querySelector('#creditGoal').value = 'Mortgage';
+  document.querySelector('#creditStatus').value = 'Active';
+  document.querySelector('#disputeStage').value = 'Round 1';
+  document.querySelector('#creditMortgageReady').value = 'No';
+}
+
+function saveCreditFile(event) {
+  event.preventDefault();
+  const creditFiles = readStore(CREDIT_FILES_KEY);
+  const id = document.querySelector('#credit-file-id').value || crypto.randomUUID();
+  const existing = creditFiles.findIndex((file) => file.id === id);
+  const record = {
+    id,
+    ...getCreditFileFormData(),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? creditFiles[existing].createdAt : new Date().toISOString(),
+  };
+
+  if (existing >= 0) creditFiles[existing] = record;
+  else creditFiles.unshift(record);
+
+  writeStore(CREDIT_FILES_KEY, creditFiles);
+  resetCreditFileForm();
+  render();
+}
+
+function editCreditFile(id) {
+  const creditFile = readStore(CREDIT_FILES_KEY).find((item) => item.id === id);
+  if (!creditFile) return;
+  document.querySelector('#credit-file-id').value = creditFile.id;
+  creditFileFields.forEach((field) => {
+    document.querySelector(`#${field}`).value = creditFile[field] || '';
+  });
+  document.querySelector('[data-tab="credit-files"]').click();
+  creditFileForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteCreditFile(id) {
+  writeStore(CREDIT_FILES_KEY, readStore(CREDIT_FILES_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredCreditFiles(creditFiles) {
+  const query = creditFileSearch.value.trim().toLowerCase();
+  return creditFiles.filter((file) => {
+    const searchable = [
+      file.creditClientName, file.creditEmail, file.creditPhone, file.negativeAccounts,
+      file.inquiries, file.latePayments, file.collections, file.chargeOffs,
+      file.repossessions, file.bankruptcy, file.disputeRoundNotes
+    ].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!creditGoalFilter.value || file.creditGoal === creditGoalFilter.value)
+      && (!creditStatusFilter.value || file.creditStatus === creditStatusFilter.value)
+      && (!creditStageFilter.value || file.disputeStage === creditStageFilter.value)
+      && (!creditMortgageFilter.value || file.creditMortgageReady === creditMortgageFilter.value);
+  });
+}
+
+function renderCreditFileMetrics(creditFiles) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  document.querySelector('#metric-credit-active').textContent = creditFiles.filter((file) => file.creditStatus !== 'Complete').length;
+  document.querySelector('#metric-credit-mortgage-ready').textContent = creditFiles.filter((file) => file.creditMortgageReady === 'Yes').length;
+  document.querySelector('#metric-credit-follow-ups').textContent = creditFiles.filter((file) => {
+    if (!file.creditFollowUpDate) return false;
+    return new Date(`${file.creditFollowUpDate}T00:00:00`) <= today;
+  }).length;
+}
+
+function renderCreditFileCard(file) {
+  const card = document.createElement('article');
+  card.className = 'card credit-file-card';
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge">${escapeHtml(file.creditGoal || 'Goal')}</span>
+      <span class="badge">${escapeHtml(file.creditStatus || 'Status')}</span>
+      <span class="badge">${escapeHtml(file.disputeStage || 'Round 1')}</span>
+      <span class="badge ${file.creditMortgageReady === 'Yes' ? 'success-badge' : ''}">Mortgage Ready: ${escapeHtml(file.creditMortgageReady || 'No')}</span>
+    </div>
+    <h3>${escapeHtml(file.creditClientName || 'Unnamed client')}</h3>
+    <p class="group">${escapeHtml(file.creditPhone || 'No phone')} • ${escapeHtml(file.creditEmail || 'No email')}</p>
+    <dl>
+      ${detail('Current Scores (EQ / EX / TU)', `${file.scoreEq || '—'} / ${file.scoreEx || '—'} / ${file.scoreTu || '—'}`)}
+      ${detail('Target Score', file.creditTargetScore)}
+      ${detail('Enrollment Date', formatDate(file.creditEnrollmentDate))}
+      ${detail('Follow-Up Date', formatDate(file.creditFollowUpDate))}
+      ${detail('Negative Accounts', file.negativeAccounts)}
+      ${detail('Inquiries', file.inquiries)}
+      ${detail('Late Payments', file.latePayments)}
+      ${detail('Collections', file.collections)}
+      ${detail('Charge Offs', file.chargeOffs)}
+      ${detail('Repossessions', file.repossessions)}
+      ${detail('Bankruptcy', file.bankruptcy)}
+      ${detail('Dispute Round Notes', file.disputeRoundNotes)}
+    </dl>
+    <div class="card-actions">
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.querySelector('.edit').addEventListener('click', () => editCreditFile(file.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteCreditFile(file.id));
+  return card;
 }
 
 function getClientFormData() {
@@ -455,16 +587,20 @@ function render() {
   const leads = readStore(LEADS_KEY);
   const clients = readStore(CLIENTS_KEY);
   const pipelineLeads = getPipelineLeads();
+  const creditFiles = readStore(CREDIT_FILES_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
   pipelineCount.textContent = `${pipelineLeads.length} lead${pipelineLeads.length === 1 ? '' : 's'}`;
+  creditFileCount.textContent = `${creditFiles.length} file${creditFiles.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
+  renderCreditFileMetrics(creditFiles);
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
+  creditFileList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!conversations.length) conversationList.innerHTML = '<p class="empty-message">No group conversations yet. Add your first tracked reply above.</p>';
@@ -475,7 +611,11 @@ function render() {
 
   const filteredClients = getFilteredClients(clients);
   if (!filteredClients.length) clientList.innerHTML = '<p class="empty-message">No clients match your current view. Add a client or adjust your filters.</p>';
-  filteredClients.forEach((client) => clientList.append(renderClientCard(client))); 
+  filteredClients.forEach((client) => clientList.append(renderClientCard(client)));
+
+  const filteredCreditFiles = getFilteredCreditFiles(creditFiles);
+  if (!filteredCreditFiles.length) creditFileList.innerHTML = '<p class="empty-message">No credit files match your current view. Add a credit repair client or adjust your filters.</p>';
+  filteredCreditFiles.forEach((file) => creditFileList.append(renderCreditFileCard(file)));
 }
 
 document.querySelectorAll('.tab').forEach((tab) => {
@@ -488,16 +628,23 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 seedSelect(document.querySelector('#pipelineStage'), pipelineStages);
 seedSelect(pipelineStageFilter, pipelineStages, 'All stages');
+seedSelect(creditGoalFilter, creditGoalOptions, 'All goals');
+seedSelect(creditStatusFilter, creditStatusOptions, 'All statuses');
+seedSelect(creditStageFilter, disputeStageOptions, 'All stages');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
 pipelineForm.addEventListener('submit', savePipelineLead);
+creditFileForm.addEventListener('submit', saveCreditFile);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
+document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
 clientSearch.addEventListener('input', render);
 pipelineSearch.addEventListener('input', render);
 pipelineSourceFilter.addEventListener('input', render);
 pipelineStageFilter.addEventListener('change', render);
+creditFileSearch.addEventListener('input', render);
+[creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 render();

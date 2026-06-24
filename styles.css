@@ -161,3 +161,29 @@ dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 }
 .stage-move-label { margin: .75rem 0; font-size: .78rem; }
 .stage-move { padding: .65rem; border-radius: .7rem; }
+
+.credit-section-grid {
+  display: grid;
+  gap: 1rem;
+}
+.credit-file-card .card-topline { align-items: center; }
+.success-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+.credit-file-card dl {
+  grid-template-columns: 1fr;
+}
+.credit-file-card dd {
+  white-space: pre-wrap;
+}
+
+@media (min-width: 720px) {
+  .credit-section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .credit-section-grid label:last-child { grid-column: 1 / -1; }
+}
+
+@media (min-width: 1000px) {
+  .credit-section-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .credit-section-grid label:last-child { grid-column: auto; }
+}
