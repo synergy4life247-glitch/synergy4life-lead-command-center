@@ -1058,11 +1058,11 @@ const uploadStatuses = {
   manualReview: 'Manual review required',
 };
 
-function createUnparsedCreditFileReport(fileName, sourceLength = 0) {
+function createUnparsedCreditFileReport(fileName, sourceLength = 0, options = {}) {
   const uploadedAt = new Date().toISOString();
   return {
     id: crypto.randomUUID(), fileName, uploadedAt, sourceLength,
-    uploadStatus: uploadStatuses.manualReview, metadata: { fileName, sourceLength, uploadedAt },
+    uploadStatus: uploadStatuses.manualReview, metadata: { fileName, sourceLength, uploadedAt, extractionMode: options.extractionMode || 'unknown', htmlReportDetected: Boolean(options.htmlReportDetected), htmlDebug: options.htmlDebug || null },
     analysis: null, verified: false, needsManualReview: true, parseMessage: parseUnavailableMessage,
   };
 }
@@ -1157,26 +1157,88 @@ function isHiddenHtmlElement(element) {
   return /display:none|visibility:hidden|opacity:0/.test(style) || element.getAttribute('type') === 'hidden';
 }
 
+function isVisibleHtmlNode(node) {
+  let parent = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  while (parent) {
+    if (isHiddenHtmlElement(parent)) return false;
+    parent = parent.parentElement;
+  }
+  return true;
+}
+
+function collectVisibleTextNodes(root) {
+  if (!root) return [];
+  const walker = (root.ownerDocument || document).createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const value = node.nodeValue.replace(/\s+/g, ' ').trim();
+      if (!value || !isVisibleHtmlNode(node)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode.nodeValue.replace(/\s+/g, ' ').trim());
+  return nodes;
+}
+
+function collectRecursiveVisibleText(node, parts = []) {
+  if (!node || !isVisibleHtmlNode(node)) return parts;
+  if (node.nodeType === Node.TEXT_NODE) {
+    const value = node.nodeValue.replace(/\s+/g, ' ').trim();
+    if (value) parts.push(value);
+    return parts;
+  }
+  node.childNodes.forEach((child) => collectRecursiveVisibleText(child, parts));
+  return parts;
+}
+
 function extractVisibleTextFromHtmlDocument(doc) {
   doc.querySelectorAll('[hidden], [aria-hidden="true"], input[type="hidden"]').forEach((element) => element.remove());
   doc.querySelectorAll('*').forEach((element) => {
     if (isHiddenHtmlElement(element)) element.remove();
   });
-  const walker = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      const value = node.nodeValue.replace(/\s+/g, ' ').trim();
-      if (!value) return NodeFilter.FILTER_REJECT;
-      let parent = node.parentElement;
-      while (parent) {
-        if (isHiddenHtmlElement(parent)) return NodeFilter.FILTER_REJECT;
-        parent = parent.parentElement;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
+
+  const visibleSelectors = 'body, table, tr, td, th, div, span, p, li';
+  const visibleTextNodes = collectVisibleTextNodes(doc.body || doc.documentElement);
+  const parts = [...visibleTextNodes];
+  doc.querySelectorAll(visibleSelectors).forEach((element) => {
+    if (!isVisibleHtmlNode(element)) return;
+    const isRowLike = /^(?:TABLE|TR)$/i.test(element.tagName);
+    const directText = [...element.childNodes]
+      .filter((child) => child.nodeType === Node.TEXT_NODE)
+      .map((child) => child.nodeValue.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join(' ');
+    const text = (isRowLike ? (element.innerText || element.textContent || '') : directText).replace(/\s+/g, ' ').trim();
+    if (text) parts.push(text);
   });
-  const parts = [];
-  while (walker.nextNode()) parts.push(walker.currentNode.nodeValue.replace(/\s+/g, ' ').trim());
-  return parts.join('\n');
+  if (!parts.length && doc.body?.textContent) parts.push(doc.body.textContent.replace(/\s+/g, ' ').trim());
+
+  let text = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const secondaryParts = [];
+  if (text.length < 1000) {
+    secondaryParts.push(
+      (doc.documentElement?.innerText || '').replace(/\s+/g, ' ').trim(),
+      (doc.body?.textContent || '').replace(/\s+/g, ' ').trim(),
+      collectRecursiveVisibleText(doc.body || doc.documentElement).join('\n')
+    );
+    text = [text, ...secondaryParts].filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  const identityIqMarkers = ['Credit Score', 'Vantage Score', 'Personal Information', 'Account Summary', 'Account History'];
+  const markersFound = identityIqMarkers.filter((marker) => new RegExp(marker.replace(/ /g, '\\s+'), 'i').test(text));
+  return {
+    text,
+    debug: {
+      htmlTextLength: text.length,
+      tableCount: doc.querySelectorAll('table').length,
+      rowCount: doc.querySelectorAll('tr').length,
+      visibleTextNodeCount: visibleTextNodes.length,
+      rawExtractedTextPreview: text.slice(0, 5000),
+      identityIqMarkersFound: markersFound,
+      identityIqMarkerMessage: markersFound.length ? '' : 'IdentityIQ markers not found in extracted HTML text.',
+      secondaryExtractionAttempted: text.length < 1000 || secondaryParts.some(Boolean),
+    },
+  };
 }
 
 async function extractHtmlReportText(file) {
@@ -1188,15 +1250,15 @@ async function readCreditReportFile(file) {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
     return extractPdfText(await loadPdfDocument(file));
   }
-  if (isHtmlCreditReportFile(file)) return extractHtmlReportText(file);
+  if (isHtmlCreditReportFile(file)) return (await extractHtmlReportText(file)).text;
   return file.text();
 }
 
 async function analyzeCreditReportFile(file) {
   if (isHtmlCreditReportFile(file)) {
     setCreditUploadStatus('HTML Report Detected');
-    const text = await extractHtmlReportText(file);
-    return parseCreditReportText(text, file, { extractionMode: 'html-text', htmlReportDetected: true }) || createUnparsedCreditFileReport(file.name, text.length);
+    const extraction = await extractHtmlReportText(file);
+    return parseCreditReportText(extraction.text, file, { extractionMode: 'html-text', htmlReportDetected: true, htmlDebug: extraction.debug }) || createUnparsedCreditFileReport(file.name, extraction.text.length, { extractionMode: 'html-text', htmlReportDetected: true, htmlDebug: extraction.debug });
   }
   if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
     const text = await file.text();
@@ -1557,7 +1619,7 @@ function parseCreditReportText(text, file, options = {}) {
   const report = {
     id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
     uploadStatus: uploadStatuses.analyzed,
-    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', htmlReportDetected: Boolean(options.htmlReportDetected), ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
+    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', htmlReportDetected: Boolean(options.htmlReportDetected), htmlDebug: options.htmlDebug || null, ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
     analysis: 'parsed', verified: true, needsManualReview: false, source: 'upload', accounts,
     bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
@@ -1661,8 +1723,11 @@ function strategyForCreditFile(report) {
 
 function renderParserDebug(report) {
   const debug = report?.parserDebug || {};
+  const htmlDebug = report?.metadata?.htmlDebug || {};
   const listValue = (value) => Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : (value || 'None');
-  return `<article class="card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}</dl></article>`;
+  const htmlStructureDebug = report?.metadata?.htmlReportDetected ? `${detail('HTML text length', htmlDebug.htmlTextLength)}${detail('Number of tables', htmlDebug.tableCount)}${detail('Number of rows', htmlDebug.rowCount)}${detail('Number of visible text nodes', htmlDebug.visibleTextNodeCount)}${detail('IdentityIQ markers found', listValue(htmlDebug.identityIqMarkersFound))}${htmlDebug.identityIqMarkerMessage ? detail('IdentityIQ marker warning', htmlDebug.identityIqMarkerMessage) : ''}` : '';
+  const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card"><h3>RAW EXTRACTED TEXT PREVIEW</h3><pre>${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.')}</pre></article>` : '';
+  return `<article class="card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}${htmlStructureDebug}</dl></article>${rawPreview}`;
 }
 
 function renderCreditFileIntelligenceDashboard() {
