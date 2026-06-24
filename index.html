@@ -25,6 +25,7 @@
       <button class="tab" type="button" data-tab="documents">Documents</button>
       <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
+      <button class="tab" type="button" data-tab="rebuild-center">Positive Credit Rebuild Center</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="communications">Communications</button>
       <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
@@ -573,6 +574,55 @@
         </form>
 
         <div id="mortgage-readiness-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
+
+
+      <section id="rebuild-center" class="panel" aria-labelledby="rebuild-center-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Client roadmap builder</p>
+            <h2 id="rebuild-center-heading">Positive Credit Rebuild Center</h2>
+          </div>
+          <span id="rebuild-count" class="count-pill">0 roadmaps</span>
+        </div>
+
+        <div class="metrics-grid rebuild-metrics" aria-label="Positive credit rebuild dashboard metrics">
+          <article class="metric-card"><span>Total Roadmaps</span><strong id="metric-rebuild-total">0</strong></article>
+          <article class="metric-card"><span>Avg Completion</span><strong id="metric-rebuild-average">0%</strong></article>
+          <article class="metric-card"><span>Completed Actions</span><strong id="metric-rebuild-completed">0</strong></article>
+          <article class="metric-card"><span>In Progress Actions</span><strong id="metric-rebuild-progress">0</strong></article>
+        </div>
+
+        <form id="rebuild-form" class="tracker-form rebuild-form">
+          <input type="hidden" id="rebuild-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="rebuildClientName" name="rebuildClientName" placeholder="Jane Smith" required /></label>
+            <label>Client Goal<select id="rebuildGoal" name="rebuildGoal"></select></label>
+          </div>
+
+          <fieldset class="checklist-fieldset">
+            <legend>Profile Deficiencies</legend>
+            <div id="rebuild-deficiency-options" class="checklist-grid rebuild-checklist"></div>
+          </fieldset>
+
+          <div id="rebuild-preview" class="rebuild-preview" aria-live="polite"></div>
+
+          <label>Advisor Notes<textarea id="rebuildNotes" name="rebuildNotes" placeholder="Advisor recommendations, client-specific context, timing notes, lender/funding strategy"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Rebuild Roadmap</button>
+            <button id="reset-rebuild-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel rebuild-controls">
+          <label>Search Roadmaps<input id="rebuild-search" placeholder="Search client, goal, deficiencies, recommendations, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Goal<select id="rebuild-goal-filter"><option value="">All goals</option></select></label>
+            <label>Filter by Action Status<select id="rebuild-status-filter"><option value="">All statuses</option></select></label>
+          </div>
+        </div>
+
+        <div id="rebuild-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="tasks" class="panel" aria-labelledby="tasks-heading">

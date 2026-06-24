@@ -704,3 +704,107 @@ button:disabled {
 @media (min-width: 720px) {
   .dispute-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+.rebuild-form .checklist-fieldset {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #f8fbff;
+}
+
+.rebuild-form .checklist-fieldset legend {
+  padding: 0 .4rem;
+  color: var(--brand-dark);
+  font-weight: 900;
+}
+
+.checklist-grid.rebuild-checklist {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .7rem;
+}
+
+.rebuild-checklist label {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .75rem;
+  border: 1px solid #dbeafe;
+  border-radius: .85rem;
+  background: white;
+}
+
+.rebuild-checklist input { width: auto; }
+
+.rebuild-preview,
+.progress-card {
+  display: grid;
+  gap: .85rem;
+}
+
+.progress-card {
+  padding: 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #eff6ff, #ffffff);
+}
+
+.progress-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: .85rem;
+  font-weight: 800;
+}
+
+.progress-heading strong { color: var(--brand-dark); }
+
+.progress-track {
+  height: .8rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+}
+
+.priority-list {
+  display: grid;
+  gap: .75rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.priority-list li {
+  padding: .85rem;
+  border: 1px solid var(--line);
+  border-radius: .9rem;
+  background: white;
+}
+
+.priority-list strong,
+.priority-list span { display: block; }
+.priority-list span { margin-top: .25rem; color: var(--muted); line-height: 1.45; }
+
+.action-status-list { padding-left: 0; list-style-position: inside; }
+.action-status-list li {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .75rem;
+}
+
+.action-status-list label { font-size: .78rem; }
+.action-status-list select { margin-top: .35rem; }
+.rebuild-card .progress-track { margin: .75rem 0; }
+
+@media (min-width: 720px) {
+  .checklist-grid.rebuild-checklist { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rebuild-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .action-status-list li { grid-template-columns: 1fr 190px; align-items: center; }
+}

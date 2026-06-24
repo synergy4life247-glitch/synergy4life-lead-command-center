@@ -16,6 +16,7 @@ const CONTENT_KEY = 'synergy4life.contentCenter';
 const AUTOMATIONS_KEY = 'synergy4life.automations';
 const ONBOARDING_KEY = 'synergy4life.onboarding';
 const DISPUTES_KEY = 'synergy4life.disputeCenter';
+const REBUILD_CENTER_KEY = 'synergy4life.positiveCreditRebuildCenter';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -93,6 +94,25 @@ const disputeStatusOptions = ['Draft', 'Ready To Send', 'Sent', 'Waiting Respons
 const disputeResultOptions = ['Pending', 'Deleted', 'Updated', 'Verified', 'No Response', 'Reinserted'];
 const disputeFields = ['disputeClientName', 'disputeCreditor', 'disputeBureau', 'disputeAccountType', 'disputeReason', 'disputeLetterType', 'disputeDateSent', 'disputeResponseDueDate', 'disputeStatus', 'disputeResult', 'disputeAssignedTeamMember', 'disputeNotes'];
 const automationFields = ['automationName', 'automationCategory', 'automationDescription', 'automationAssignedTeamMember', 'automationTriggerDate', 'automationFrequency', 'automationLastCompleted', 'automationNextDueDate', 'automationStatus', 'automationPriority', 'automationNotes'];
+const rebuildGoalOptions = ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'];
+const rebuildStatusOptions = ['Recommended', 'In Progress', 'Completed'];
+const rebuildDeficiencies = [
+  'No revolving accounts', 'No installment accounts', 'Thin file', 'High utilization',
+  'No mortgage history', 'No auto loan history', 'Too many inquiries', 'No authorized user accounts',
+  'No positive payment history', 'File suppression/freeze alerts'
+];
+const rebuildFields = ['rebuildClientName', 'rebuildGoal', 'rebuildNotes'];
+const rebuildRecommendationRules = [
+  { action: 'Remove freezes/suppressions', priority: 1, deficiencies: ['File suppression/freeze alerts'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Confirm Equifax, Experian, and TransUnion files are accessible before any lender or card prequalification.' },
+  { action: 'Lower utilization below 10%', priority: 2, deficiencies: ['High utilization'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Pay revolving balances down before statement close dates and keep one small reporting balance when possible.' },
+  { action: 'Add secured credit cards', priority: 3, deficiencies: ['No revolving accounts', 'Thin file', 'No positive payment history'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Open 1-2 low-fee secured cards, set autopay, and keep reported utilization under 10%.' },
+  { action: 'Add credit builder loan', priority: 4, deficiencies: ['No installment accounts', 'Thin file', 'No positive payment history'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Use a credit builder loan to establish installment payment history without taking on unnecessary debt.' },
+  { action: 'Add authorized user tradeline', priority: 5, deficiencies: ['No authorized user accounts', 'Thin file', 'No positive payment history'], goals: ['Buy a Home', 'Buy a Car', 'Personal Funding', 'Credit Card Approvals'], step: 'Add a seasoned, low-utilization authorized user account from a trusted primary cardholder.' },
+  { action: 'Add installment loan', priority: 6, deficiencies: ['No installment accounts', 'No auto loan history'], goals: ['Buy a Car', 'Personal Funding', 'Business Funding'], step: 'Add an appropriate installment account only if the payment fits the client budget and approval path.' },
+  { action: 'Age existing accounts', priority: 7, deficiencies: ['Thin file', 'No positive payment history'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Keep accounts open, current, and stable while avoiding unnecessary closures or new-account churn.' },
+  { action: 'Limit inquiries', priority: 8, deficiencies: ['Too many inquiries'], goals: ['Buy a Home', 'Buy a Car', 'Business Funding', 'Personal Funding', 'Credit Card Approvals'], step: 'Pause nonessential applications and group necessary rate shopping into tight windows.' },
+  { action: 'Add credit builder loan', priority: 9, deficiencies: ['No mortgage history'], goals: ['Buy a Home'], step: 'Strengthen non-mortgage installment history while preparing reserves, DTI, and documentation for underwriting.' }
+];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -202,6 +222,14 @@ const disputeBureauFilter = document.querySelector('#dispute-bureau-filter');
 const disputeCreditorFilter = document.querySelector('#dispute-creditor-filter');
 const disputeStatusFilter = document.querySelector('#dispute-status-filter');
 const disputeResultFilter = document.querySelector('#dispute-result-filter');
+const rebuildForm = document.querySelector('#rebuild-form');
+const rebuildList = document.querySelector('#rebuild-list');
+const rebuildCount = document.querySelector('#rebuild-count');
+const rebuildSearch = document.querySelector('#rebuild-search');
+const rebuildGoalFilter = document.querySelector('#rebuild-goal-filter');
+const rebuildStatusFilter = document.querySelector('#rebuild-status-filter');
+const rebuildPreview = document.querySelector('#rebuild-preview');
+const rebuildDeficiencyOptions = document.querySelector('#rebuild-deficiency-options');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -238,6 +266,130 @@ function seedSelect(select, values, allLabel = '') {
 
 
 
+
+
+function selectedRebuildDeficiencies() {
+  return [...document.querySelectorAll('.rebuild-deficiency:checked')].map((input) => input.value);
+}
+
+function buildRebuildActions(deficiencies, goal, existingActions = []) {
+  const existingStatus = new Map(existingActions.map((item) => [item.action, item.status]));
+  const actions = rebuildRecommendationRules
+    .filter((rule) => rule.goals.includes(goal) && rule.deficiencies.some((deficiency) => deficiencies.includes(deficiency)))
+    .sort((a, b) => a.priority - b.priority)
+    .filter((rule, index, list) => list.findIndex((item) => item.action === rule.action) === index)
+    .map((rule) => ({ action: rule.action, step: rule.step, priority: rule.priority, status: existingStatus.get(rule.action) || 'Recommended' }));
+  return actions.length ? actions : [{ action: 'Age existing accounts', step: 'Maintain current positive accounts, avoid late payments, and reassess after the next reporting cycle.', priority: 1, status: existingStatus.get('Age existing accounts') || 'Recommended' }];
+}
+
+function rebuildCompletion(actions = []) {
+  return actions.length ? Math.round((actions.filter((item) => item.status === 'Completed').length / actions.length) * 100) : 0;
+}
+
+function getRebuildFormData(existing = null) {
+  const data = rebuildFields.reduce((record, field) => {
+    record[field] = document.querySelector(`#${field}`).value.trim();
+    return record;
+  }, {});
+  data.deficiencies = selectedRebuildDeficiencies();
+  data.actions = buildRebuildActions(data.deficiencies, data.rebuildGoal, existing?.actions || []);
+  return data;
+}
+
+function updateRebuildPreview() {
+  const data = getRebuildFormData();
+  const percent = rebuildCompletion(data.actions);
+  rebuildPreview.innerHTML = `
+    <div class="progress-card">
+      <div class="progress-heading"><strong>${percent}% complete</strong><span>${data.actions.length} recommended action${data.actions.length === 1 ? '' : 's'}</span></div>
+      <div class="progress-track"><span style="width: ${percent}%"></span></div>
+    </div>
+    <ol class="priority-list">${data.actions.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><span>${escapeHtml(item.step)}</span></li>`).join('')}</ol>`;
+}
+
+function resetRebuildForm() {
+  rebuildForm.reset();
+  document.querySelector('#rebuild-id').value = '';
+  document.querySelector('#rebuildGoal').value = rebuildGoalOptions[0];
+  document.querySelectorAll('.rebuild-deficiency').forEach((input) => input.checked = false);
+  updateRebuildPreview();
+}
+
+function saveRebuildRoadmap(event) {
+  event.preventDefault();
+  const roadmaps = readStore(REBUILD_CENTER_KEY);
+  const id = document.querySelector('#rebuild-id').value || crypto.randomUUID();
+  const existingIndex = roadmaps.findIndex((item) => item.id === id);
+  const existing = existingIndex >= 0 ? roadmaps[existingIndex] : null;
+  const record = { id, ...getRebuildFormData(existing), updatedAt: new Date().toISOString(), createdAt: existing?.createdAt || new Date().toISOString() };
+  if (existingIndex >= 0) roadmaps[existingIndex] = record;
+  else roadmaps.unshift(record);
+  writeStore(REBUILD_CENTER_KEY, roadmaps);
+  resetRebuildForm();
+  render();
+}
+
+function updateRebuildActionStatus(id, action, status) {
+  const roadmaps = readStore(REBUILD_CENTER_KEY);
+  const roadmap = roadmaps.find((item) => item.id === id);
+  if (!roadmap) return;
+  roadmap.actions = (roadmap.actions || []).map((item) => item.action === action ? { ...item, status } : item);
+  roadmap.updatedAt = new Date().toISOString();
+  writeStore(REBUILD_CENTER_KEY, roadmaps);
+  render();
+}
+
+function editRebuildRoadmap(id) {
+  const roadmap = readStore(REBUILD_CENTER_KEY).find((item) => item.id === id);
+  if (!roadmap) return;
+  document.querySelector('#rebuild-id').value = roadmap.id;
+  rebuildFields.forEach((field) => document.querySelector(`#${field}`).value = roadmap[field] || '');
+  document.querySelectorAll('.rebuild-deficiency').forEach((input) => input.checked = (roadmap.deficiencies || []).includes(input.value));
+  updateRebuildPreview();
+  document.querySelector('[data-tab="rebuild-center"]').click();
+  rebuildForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteRebuildRoadmap(id) {
+  writeStore(REBUILD_CENTER_KEY, readStore(REBUILD_CENTER_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredRebuildRoadmaps(roadmaps) {
+  const query = rebuildSearch.value.trim().toLowerCase();
+  return roadmaps.filter((roadmap) => {
+    const blob = [roadmap.rebuildClientName, roadmap.rebuildGoal, roadmap.rebuildNotes, ...(roadmap.deficiencies || []), ...(roadmap.actions || []).flatMap((item) => [item.action, item.step, item.status])].join(' ').toLowerCase();
+    const matchesQuery = !query || blob.includes(query);
+    const matchesGoal = !rebuildGoalFilter.value || roadmap.rebuildGoal === rebuildGoalFilter.value;
+    const matchesStatus = !rebuildStatusFilter.value || (roadmap.actions || []).some((item) => item.status === rebuildStatusFilter.value);
+    return matchesQuery && matchesGoal && matchesStatus;
+  });
+}
+
+function renderRebuildMetrics(roadmaps) {
+  const actions = roadmaps.flatMap((item) => item.actions || []);
+  document.querySelector('#metric-rebuild-total').textContent = roadmaps.length;
+  document.querySelector('#metric-rebuild-average').textContent = `${Math.round(average(roadmaps.map((item) => rebuildCompletion(item.actions))))}%`;
+  document.querySelector('#metric-rebuild-completed').textContent = actions.filter((item) => item.status === 'Completed').length;
+  document.querySelector('#metric-rebuild-progress').textContent = actions.filter((item) => item.status === 'In Progress').length;
+}
+
+function renderRebuildCard(roadmap) {
+  const percent = rebuildCompletion(roadmap.actions);
+  const card = document.createElement('article');
+  card.className = 'card rebuild-card';
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(roadmap.rebuildGoal || 'Goal')}</span><span class="badge success-badge">${percent}% complete</span></div>
+    <h3>${escapeHtml(roadmap.rebuildClientName || 'Unnamed client')}</h3>
+    <div class="progress-track"><span style="width: ${percent}%"></span></div>
+    <dl>${detail('Profile Deficiencies', (roadmap.deficiencies || []).join(', ') || 'None selected')}${detail('Advisor Notes', roadmap.rebuildNotes || '—')}</dl>
+    <ol class="priority-list action-status-list">${(roadmap.actions || []).map((item) => `<li><div><strong>${escapeHtml(item.action)}</strong><span>${escapeHtml(item.step)}</span></div><label>Status<select data-action="${escapeHtml(item.action)}">${rebuildStatusOptions.map((status) => `<option value="${status}" ${item.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></label></li>`).join('')}</ol>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelectorAll('[data-action]').forEach((select) => select.addEventListener('change', (event) => updateRebuildActionStatus(roadmap.id, event.target.dataset.action, event.target.value)));
+  card.querySelector('.edit').addEventListener('click', () => editRebuildRoadmap(roadmap.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteRebuildRoadmap(roadmap.id));
+  return card;
+}
 
 function normalizeAutomation(automation) {
   return {
@@ -1182,6 +1334,7 @@ function isDisputeOverdue(dispute) {
 function saveDispute(event) {
   event.preventDefault();
   const disputes = readStore(DISPUTES_KEY);
+  const rebuildRoadmaps = readStore(REBUILD_CENTER_KEY);
   const id = document.querySelector('#dispute-id').value || crypto.randomUUID();
   const existing = disputes.findIndex((dispute) => dispute.id === id);
   const record = {
@@ -2208,6 +2361,7 @@ function render() {
   const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
   const disputes = readStore(DISPUTES_KEY);
+  const rebuildRoadmaps = readStore(REBUILD_CENTER_KEY);
   const documents = readStore(DOCUMENTS_KEY);
   const communications = readStore(COMMUNICATIONS_KEY);
   const revenueRecords = getRevenueRecords();
@@ -2224,6 +2378,7 @@ function render() {
   creditIntelligenceCount.textContent = `${creditIntelligence.length} report${creditIntelligence.length === 1 ? '' : 's'}`;
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
   disputeCount.textContent = `${disputes.length} dispute${disputes.length === 1 ? '' : 's'}`;
+  rebuildCount.textContent = `${rebuildRoadmaps.length} roadmap${rebuildRoadmaps.length === 1 ? '' : 's'}`;
   documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
   communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
   revenueTransactionCount.textContent = `${revenueRecords.length} transaction${revenueRecords.length === 1 ? '' : 's'}`;
@@ -2240,6 +2395,7 @@ function render() {
   renderMortgageMetrics(mortgageReadiness);
   updateDocumentClientFilter(documents);
   renderDisputeMetrics(disputes);
+  renderRebuildMetrics(rebuildRoadmaps);
   renderDocumentMetrics(documents);
   renderDocumentClientCounts(documents);
   renderCommunicationMetrics(communications);
@@ -2262,6 +2418,7 @@ function render() {
   mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
   disputeList.innerHTML = '';
+  rebuildList.innerHTML = '';
   documentList.innerHTML = '';
   communicationList.innerHTML = '';
   revenueTransactionList.innerHTML = '';
@@ -2287,6 +2444,10 @@ function render() {
   const filteredClients = getFilteredClients(clients);
   if (!filteredClients.length) clientList.innerHTML = '<p class="empty-message">No clients match your current view. Add a client or adjust your filters.</p>';
   filteredClients.forEach((client) => clientList.append(renderClientCard(client)));
+
+  const filteredRebuildRoadmaps = getFilteredRebuildRoadmaps(rebuildRoadmaps);
+  if (!filteredRebuildRoadmaps.length) rebuildList.innerHTML = '<p class="empty-message">No rebuild roadmaps match your current view. Analyze a client profile above.</p>';
+  filteredRebuildRoadmaps.forEach((roadmap) => rebuildList.append(renderRebuildCard(roadmap)));
 
   const filteredDisputes = getFilteredDisputes(disputes);
   if (!filteredDisputes.length) disputeList.innerHTML = '<p class="empty-message">No dispute records match your current view. Add a dispute letter workflow or adjust your filters.</p>';
@@ -2402,6 +2563,10 @@ seedSelect(document.querySelector('#onboardingService'), onboardingServiceOption
 seedSelect(document.querySelector('#onboardingStatus'), onboardingStatusOptions);
 seedSelect(onboardingServiceFilter, onboardingServiceOptions, 'All services');
 seedSelect(onboardingStatusFilter, onboardingStatusOptions, 'All statuses');
+seedSelect(document.querySelector('#rebuildGoal'), rebuildGoalOptions);
+seedSelect(rebuildGoalFilter, rebuildGoalOptions, 'All goals');
+seedSelect(rebuildStatusFilter, rebuildStatusOptions, 'All statuses');
+rebuildDeficiencyOptions.innerHTML = rebuildDeficiencies.map((deficiency) => `<label><input class="rebuild-deficiency" type="checkbox" value="${escapeHtml(deficiency)}" /> ${escapeHtml(deficiency)}</label>`).join('');
 seedSelect(document.querySelector('#automationCategory'), automationCategoryOptions);
 seedSelect(document.querySelector('#automationFrequency'), automationFrequencyOptions);
 seedSelect(document.querySelector('#automationStatus'), automationStatusOptions);
@@ -2425,6 +2590,7 @@ expenseForm.addEventListener('submit', saveExpense);
 teamForm.addEventListener('submit', saveTeamMember);
 contentForm.addEventListener('submit', saveContent);
 automationForm.addEventListener('submit', saveAutomation);
+rebuildForm.addEventListener('submit', saveRebuildRoadmap);
 onboardingForm.addEventListener('submit', saveOnboardingRecord);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
@@ -2440,6 +2606,7 @@ document.querySelector('#reset-expense-form').addEventListener('click', resetExp
 document.querySelector('#reset-team-form').addEventListener('click', resetTeamForm);
 document.querySelector('#reset-content-form').addEventListener('click', resetContentForm);
 document.querySelector('#reset-automation-form').addEventListener('click', resetAutomationForm);
+document.querySelector('#reset-rebuild-form').addEventListener('click', resetRebuildForm);
 document.querySelector('#reset-onboarding-form').addEventListener('click', resetOnboardingForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
@@ -2467,10 +2634,12 @@ revenueSearch.addEventListener('input', render);
 teamSearch.addEventListener('input', render);
 contentSearch.addEventListener('input', render);
 automationSearch.addEventListener('input', render);
+rebuildSearch.addEventListener('input', render);
 onboardingSearch.addEventListener('input', render);
 [teamRoleFilter, teamStatusFilter].forEach((control) => control.addEventListener('change', render));
 [contentPlatformFilter, contentTypeFilter, contentCtaFilter, contentStatusFilter].forEach((control) => control.addEventListener('change', render));
 [automationCategoryFilter, automationStatusFilter, automationPriorityFilter].forEach((control) => control.addEventListener('change', render));
+[rebuildGoalFilter, rebuildStatusFilter].forEach((control) => control.addEventListener('change', render));
 [onboardingStatusFilter, onboardingServiceFilter, onboardingTeamFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
@@ -2478,6 +2647,9 @@ onboardingSearch.addEventListener('input', render);
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
 [communicationContactFilter, communicationTypeFilter, communicationOutcomeFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
+document.querySelectorAll('.rebuild-deficiency').forEach((control) => control.addEventListener('change', updateRebuildPreview));
+document.querySelector('#rebuildGoal').addEventListener('change', updateRebuildPreview);
+updateRebuildPreview();
 updateCreditIntelligencePreview();
 resetDisputeForm();
 resetDocumentForm();
@@ -2487,5 +2659,6 @@ resetExpenseForm();
 resetTeamForm();
 resetContentForm();
 resetAutomationForm();
+resetRebuildForm();
 resetOnboardingForm();
 render();
