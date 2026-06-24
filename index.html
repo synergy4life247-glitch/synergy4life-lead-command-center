@@ -21,6 +21,7 @@
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="onboarding">Onboarding</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+      <button class="tab" type="button" data-tab="dispute-center">Dispute Center</button>
       <button class="tab" type="button" data-tab="documents">Documents</button>
       <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
@@ -349,6 +350,66 @@
         </div>
 
         <div id="credit-file-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="dispute-center" class="panel" aria-labelledby="dispute-center-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Dispute workflow command</p>
+            <h2 id="dispute-center-heading">Dispute Center</h2>
+          </div>
+          <span id="dispute-count" class="count-pill">0 disputes</span>
+        </div>
+
+        <div class="dispute-section-tabs" aria-label="Dispute Center sections">
+          <span class="count-pill">Letter Templates</span>
+          <span class="count-pill">Active Disputes</span>
+          <span class="count-pill">Escalations</span>
+          <span class="count-pill">Attorney Referrals</span>
+        </div>
+
+        <div class="metrics-grid dispute-metrics" aria-label="Dispute dashboard metrics">
+          <article class="metric-card"><span>Letters Sent</span><strong id="metric-dispute-sent">0</strong></article>
+          <article class="metric-card overdue-metric"><span>Responses Pending</span><strong id="metric-dispute-pending">0</strong></article>
+          <article class="metric-card"><span>Verified Accounts</span><strong id="metric-dispute-verified">0</strong></article>
+          <article class="metric-card"><span>Deleted Accounts</span><strong id="metric-dispute-deleted">0</strong></article>
+          <article class="metric-card urgent-metric"><span>Escalations Active</span><strong id="metric-dispute-escalations">0</strong></article>
+        </div>
+
+        <form id="dispute-form" class="tracker-form dispute-form">
+          <input type="hidden" id="dispute-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="disputeClientName" name="disputeClientName" placeholder="Jane Smith" required /></label>
+            <label>Creditor<input id="disputeCreditor" name="disputeCreditor" placeholder="Capital One, Experian, Portfolio Recovery" /></label>
+            <label>Bureau<select id="disputeBureau" name="disputeBureau"></select></label>
+            <label>Account Type<input id="disputeAccountType" name="disputeAccountType" placeholder="Collection, charge-off, late payment" /></label>
+            <label>Dispute Reason<input id="disputeReason" name="disputeReason" placeholder="Not mine, inaccurate balance, obsolete" /></label>
+            <label>Letter Type<select id="disputeLetterType" name="disputeLetterType"></select></label>
+            <label>Date Sent<input id="disputeDateSent" name="disputeDateSent" type="date" /></label>
+            <label>Response Due Date<input id="disputeResponseDueDate" name="disputeResponseDueDate" type="date" /></label>
+            <label>Current Status<select id="disputeStatus" name="disputeStatus"></select></label>
+            <label>Result<select id="disputeResult" name="disputeResult"></select></label>
+            <label>Assigned Team Member<input id="disputeAssignedTeamMember" name="disputeAssignedTeamMember" placeholder="Team member" /></label>
+          </div>
+          <label>Notes<textarea id="disputeNotes" name="disputeNotes" placeholder="Letter details, proof attached, bureau responses, escalation plan, attorney referral notes"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Dispute Record</button>
+            <button id="reset-dispute-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel dispute-controls">
+          <label>Search Disputes<input id="dispute-search" placeholder="Search client, creditor, bureau, reason, letter type, team, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Bureau<select id="dispute-bureau-filter"><option value="">All bureaus</option></select></label>
+            <label>Filter by Creditor<input id="dispute-creditor-filter" placeholder="Any creditor" /></label>
+            <label>Filter by Status<select id="dispute-status-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Result<select id="dispute-result-filter"><option value="">All results</option></select></label>
+          </div>
+        </div>
+
+        <div id="dispute-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="documents" class="panel" aria-labelledby="documents-heading">
