@@ -197,6 +197,7 @@ const taskStatusFilter = document.querySelector('#task-status-filter');
 const taskPriorityFilter = document.querySelector('#task-priority-filter');
 const taskSourceFilter = document.querySelector('#task-source-filter');
 const dashboardSections = document.querySelector('#dashboard-sections');
+const dashboardOverview = document.querySelector('#dashboard-overview');
 const activityFeed = document.querySelector('#activity-feed');
 const dashboardUpdated = document.querySelector('#dashboard-updated');
 const documentForm = document.querySelector('#document-form');
@@ -2454,14 +2455,25 @@ function collectActivity({ leads, clients, pipelineLeads, creditFiles, tasks, te
 
 function renderDashboard(data) {
   const metrics = calculateDashboardMetrics(data);
+  const coreMetrics = [
+    ['Total Leads', metrics.leads[0][1]],
+    ['Active Clients', metrics.clients[0][1]],
+    ['Follow-Ups Due', metrics.tasks[2][1] + metrics.communications[2][1]],
+    ['Revenue', metrics.financial[0][1]],
+  ];
+  dashboardOverview.innerHTML = coreMetrics.map(([label, value]) => `<article class="metric-card dashboard-metric-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
+
   const groups = [
-    ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks], ['AUTOMATIONS', metrics.automations],
-    ['ONBOARDING', metrics.onboarding],
-    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['COMMUNICATIONS', metrics.communications], ['TEAM', metrics.team], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
+    ['Leads', [...metrics.leads, ...metrics.pipeline]],
+    ['Clients', [...metrics.clients, ...metrics.onboarding, ...metrics.documents]],
+    ['Credit Strategy', metrics.creditFiles],
+    ['Operations', [...metrics.tasks, ...metrics.communications, ...metrics.team]],
+    ['Revenue', metrics.financial],
+    ['Automations', metrics.automations],
   ];
   dashboardSections.innerHTML = groups.map(([title, items]) => `
-    <section class="dashboard-widget ${title === 'PIPELINE' || title === 'FINANCIAL METRICS' ? 'wide-widget' : ''}">
-      <div class="dashboard-widget-header"><h3>${escapeHtml(title)}</h3></div>
+    <section class="dashboard-widget ${title === 'Leads' || title === 'Clients' || title === 'Operations' ? 'wide-widget' : ''}">
+      <div class="dashboard-widget-header"><div><p class="eyebrow">Workspace</p><h3>${escapeHtml(title)}</h3></div></div>
       <div class="metrics-grid">${items.map(([label, value]) => `<article class="metric-card dashboard-metric-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('')}</div>
     </section>`).join('');
   const activity = collectActivity(data);

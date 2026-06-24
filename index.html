@@ -14,45 +14,97 @@
       </div>
     </header>
 
-    <nav class="tabs" aria-label="Primary navigation">
-      <button class="tab active" type="button" data-tab="dashboard">Home Dashboard</button>
-      <button class="tab" type="button" data-tab="leads">Leads</button>
-      <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
-      <button class="tab" type="button" data-tab="clients">Clients</button>
-      <button class="tab" type="button" data-tab="onboarding">Onboarding</button>
-      <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
-      <button class="tab" type="button" data-tab="dispute-center">Dispute Center</button>
-      <button class="tab" type="button" data-tab="documents">Documents</button>
-      <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
-      <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
-      <button class="tab" type="button" data-tab="rebuild-center">Positive Credit Rebuild Center</button>
-      <button class="tab" type="button" data-tab="tasks">Tasks</button>
-      <button class="tab" type="button" data-tab="communications">Communications</button>
-      <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
-      <button class="tab" type="button" data-tab="team">Team</button>
-      <button class="tab" type="button" data-tab="content">Content</button>
-      <button class="tab" type="button" data-tab="automations">Automations</button>
-      <button class="tab" type="button" data-tab="group-conversations">Credit Conversations</button>
+    <nav class="workspace-nav" aria-label="Primary navigation">
+      <div class="nav-home">
+        <button class="tab active" type="button" data-tab="dashboard">Home Dashboard</button>
+      </div>
+      <div class="nav-groups" role="list">
+        <section class="nav-group" aria-labelledby="nav-leads" role="listitem">
+          <h2 id="nav-leads">Leads</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
+            <button class="tab" type="button" data-tab="leads">Converted Leads</button>
+            <button class="tab" type="button" data-tab="group-conversations">Credit Conversations</button>
+          </div>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-clients" role="listitem">
+          <h2 id="nav-clients">Clients</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="clients">Clients</button>
+            <button class="tab" type="button" data-tab="onboarding">Onboarding</button>
+            <button class="tab" type="button" data-tab="documents">Documents</button>
+          </div>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-credit-strategy" role="listitem">
+          <h2 id="nav-credit-strategy">Credit Strategy</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+            <button class="tab" type="button" data-tab="dispute-center">Dispute Center</button>
+            <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
+            <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
+            <button class="tab" type="button" data-tab="rebuild-center">Rebuild Center</button>
+          </div>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-operations" role="listitem">
+          <h2 id="nav-operations">Operations</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="tasks">Tasks</button>
+            <button class="tab" type="button" data-tab="communications">Communications</button>
+            <button class="tab" type="button" data-tab="team">Team</button>
+            <button class="tab" type="button" data-tab="content">Content</button>
+          </div>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-revenue" role="listitem">
+          <h2 id="nav-revenue">Revenue</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="revenue-center">Revenue Center</button>
+          </div>
+        </section>
+        <section class="nav-group" aria-labelledby="nav-automations" role="listitem">
+          <h2 id="nav-automations">Automations</h2>
+          <div class="nav-links">
+            <button class="tab" type="button" data-tab="automations">Automations</button>
+          </div>
+        </section>
+      </div>
     </nav>
 
     <main>
       <section id="dashboard" class="panel active" aria-labelledby="dashboard-heading">
         <div class="dashboard-hero">
           <div>
-            <p class="eyebrow">CEO command view</p>
+            <p class="eyebrow">Synergy4Life OS</p>
             <h2 id="dashboard-heading">Home Dashboard</h2>
-            <p>Real-time Synergy4Life performance metrics from leads, clients, tasks, credit files, pipeline, and finance activity.</p>
+            <p>A clean command view for core performance, follow-up priorities, recent activity, and fast access to the tools your team already uses.</p>
           </div>
           <span id="dashboard-updated" class="count-pill">Updated now</span>
         </div>
 
-        <div class="quick-actions" aria-label="Quick actions">
-          <button class="primary quick-action" type="button" data-target-tab="pipeline">Add Lead</button>
-          <button class="primary quick-action" type="button" data-target-tab="clients">Add Client</button>
-          <button class="primary quick-action" type="button" data-target-tab="credit-files">Add Credit File</button>
-          <button class="primary quick-action" type="button" data-target-tab="tasks">Add Task</button>
-          <button class="secondary quick-action" type="button" data-target-tab="tasks">Add Follow Up</button>
-        </div>
+        <section class="dashboard-widget overview-widget" aria-labelledby="overview-heading">
+          <div class="dashboard-widget-header">
+            <div>
+              <p class="eyebrow">Business snapshot</p>
+              <h3 id="overview-heading">Core Metrics</h3>
+            </div>
+          </div>
+          <div id="dashboard-overview" class="metrics-grid overview-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="dashboard-widget quick-actions-widget" aria-labelledby="quick-actions-heading">
+          <div class="dashboard-widget-header">
+            <div>
+              <p class="eyebrow">Shortcuts</p>
+              <h3 id="quick-actions-heading">Quick Actions</h3>
+            </div>
+          </div>
+          <div class="quick-actions" aria-label="Quick actions">
+            <button class="primary quick-action" type="button" data-target-tab="pipeline">Add Lead</button>
+            <button class="primary quick-action" type="button" data-target-tab="clients">Add Client</button>
+            <button class="primary quick-action" type="button" data-target-tab="credit-files">Add Credit File</button>
+            <button class="primary quick-action" type="button" data-target-tab="tasks">Add Task</button>
+            <button class="secondary quick-action" type="button" data-target-tab="tasks">Add Follow Up</button>
+          </div>
+        </section>
 
         <div id="dashboard-sections" class="dashboard-sections" aria-live="polite"></div>
 
