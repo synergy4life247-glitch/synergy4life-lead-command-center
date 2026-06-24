@@ -19,9 +19,33 @@ const DISPUTES_KEY = 'synergy4life.disputeCenter';
 const REBUILD_CENTER_KEY = 'synergy4life.positiveCreditRebuildCenter';
 
 const fields = [
-  'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
-  'leadTemperature', 'followUpNeeded', 'followUpDate', 'dmSent', 'status', 'notes', 'reference'
+  'platform', 'groupName', 'personName', 'originalQuestion', 'creditIssueCategory', 'painPointSummary',
+  'publicReply', 'suggestedFollowUpQuestion', 'suggestedCta', 'recommendedOffer', 'leadTemperature',
+  'followUpNeeded', 'followUpDate', 'dmSent', 'convertedToLead', 'notes'
 ];
+
+const creditIssueCategories = [
+  'Late Payments', 'Collections', 'Charge-Offs', 'Repossession', 'Bankruptcy', 'Student Loans',
+  'Medical Collections', 'Inquiries', 'Utilization', 'Thin File', 'No Positive Credit',
+  'Mortgage Readiness', 'Auto Approval', 'Business Credit', 'Identity Theft', 'Mixed File',
+  'Data Suppression / Frozen File', 'Bureau Stall Response', 'General Credit Education'
+];
+const suggestedCtaOptions = [
+  'Free Skool Community', 'Free Credit Audit', 'Credit Repair Program', 'Mentorship',
+  'Backend Services', 'Mortgage Readiness Review', 'Realtor Consultation'
+];
+const responseTemplates = {
+  'Late payment question': ['Late Payments','Free Credit Audit','Credit Repair Program','Yes — late payments can matter a lot because payment history is one of the biggest parts of your credit profile. The first thing I’d look at is whether the late is reporting accurately across all bureaus, then whether you have current positive accounts helping outweigh it. A late payment is not something I’d ignore, but I also would not panic or assume it has to hold you back forever. What month and year is the late payment showing?','What month and year is the late payment showing, and is it on all three bureaus?','Offer a free credit audit to review the late payment and surrounding credit profile.'],
+  'Collection question': ['Collections','Free Credit Audit','Credit Repair Program','A collection can hurt because it signals an account went unpaid and got placed with a third party. Before paying anything, I’d want to know who is reporting it, whether the balance and dates are accurate, and whether it is still within the reporting timeline. Paying without a plan does not always create the outcome people expect, so it is better to review the full picture first. Is this collection medical, credit card, utility, or something else?','Is this collection medical, credit card, utility, or another type of account?','Review the collection details and recommend an audit before action.'],
+  'Charge-off question': ['Charge-Offs','Free Credit Audit','Credit Repair Program','A charge-off means the original creditor wrote the account off internally, but it can still report and affect approvals. The key is checking the dates, balance, ownership, and whether the reporting is consistent across the bureaus. It matters because lenders often view charge-offs as a serious risk item. Do you know if the original creditor still owns it or if it was sold to a collection company?','Do you know if the original creditor still owns it or if it was sold to a collection company?','Audit the original creditor and any matching collection reporting.'],
+  'Repo question': ['Repossession','Free Credit Audit','Credit Repair Program','A repo can be a major credit issue because it affects payment history, auto lending risk, and sometimes leaves a deficiency balance. I’d want to look at whether it is voluntary or involuntary, the dates, the balance, and whether any collection tied to it is also reporting. The goal is to understand exactly what is hurting you before choosing a strategy. When did the repo happen?','When did the repossession happen, and is there a balance still reporting?','Review repo reporting and any deficiency balance before recommending next steps.'],
+  'Bankruptcy question': ['Bankruptcy','Free Credit Audit','Credit Repair Program','Bankruptcy does not mean your credit journey is over, but it changes the rebuild strategy. What matters now is whether the bankruptcy is reporting correctly, whether included accounts are updated properly, and whether you have new positive accounts building after discharge. The mistake I see is people waiting too long to rebuild. Has your bankruptcy been discharged yet?','Has your bankruptcy been discharged, and do you have any positive accounts reporting now?','Map a post-bankruptcy rebuild plan with compliant positive credit steps.'],
+  'Utilization question': ['Utilization','Free Skool Community','Free Credit Audit','Yes — utilization can move scores because it shows how much of your revolving credit you are using. In simple terms, high balances make you look riskier even if you pay on time. Getting balances lower, especially before statement closing dates, can help your profile look stronger. What are your current credit card balances compared to the limits?','What are your current card balances compared to the credit limits?','Calculate utilization and suggest payoff/reporting timing priorities.'],
+  'Mortgage readiness question': ['Mortgage Readiness','Mortgage Readiness Review','Mortgage Readiness Review','For mortgage readiness, lenders usually look beyond the score. They care about payment history, collections, charge-offs, utilization, debt-to-income, and whether your file looks stable. The goal is not just a higher score — it is being approvable with fewer underwriting issues. What loan type are you aiming for: FHA, VA, USDA, or conventional?','What loan type are you aiming for, and what is your target purchase timeline?','Complete a mortgage readiness review and identify approval blockers.'],
+  'Thin file / no positive credit question': ['Thin File','Free Skool Community','Free Credit Audit','A thin file means there is not enough positive credit history for lenders to feel confident. Even if you have few negatives, the file may still need active positive accounts reporting. The key is adding the right kind of credit safely and keeping it paid on time with low balances. Do you currently have any open credit cards or installment accounts?','Do you currently have any open credit cards, installment loans, or authorized user accounts?','Recommend safe positive credit-building steps based on current accounts.'],
+  'Inquiry removal question': ['Inquiries','Free Credit Audit','Credit Repair Program','Inquiries can matter, but they are usually not the biggest issue unless there are a lot of them or they are recent. The first thing is knowing whether each inquiry was authorized and tied to an application. If it was legitimate, the strategy is different than if it was unauthorized or tied to identity theft. Are these inquiries from applications you recognize?','Are these inquiries from applications you recognize and authorized?','Separate authorized inquiries from potential fraud and review the full profile.'],
+  'Credit repair business question': ['Business Credit','Mentorship','Mentorship','If you are trying to build a credit repair business, the biggest thing is learning how to diagnose the file before you sell a service. You need systems for intake, audits, education, follow-up, compliance awareness, and client expectations. This business is not about promising deletions — it is about process, documentation, and helping people understand their path. Are you just starting or do you already have clients?','Are you just starting, or do you already have clients and need systems?','Invite them to mentorship or backend support based on experience level.']
+};
 
 const clientFields = [
   'fullName', 'phone', 'email', 'currentScore', 'goalScore', 'clientGoal',
@@ -2149,13 +2173,61 @@ function getFormData() {
   }, {});
 }
 
+function normalizeConversation(conversation) {
+  if (!conversation) return {};
+  return {
+    ...conversation,
+    originalQuestion: conversation.originalQuestion || conversation.painPoint || '',
+    painPointSummary: conversation.painPointSummary || conversation.painPoint || '',
+    suggestedCta: conversation.suggestedCta || conversation.ctaUsed || '',
+    convertedToLead: conversation.convertedToLead || (conversation.status === 'Converted to lead' ? 'Yes' : 'No'),
+  };
+}
+
+function templateToObject(template) {
+  const [category, cta, offer, reply, followUp, nextAction] = template;
+  return { category, cta, offer, reply, followUp, nextAction };
+}
+
+function selectedTemplate() {
+  const selected = document.querySelector('#response-template-select').value;
+  return selected ? templateToObject(responseTemplates[selected]) : null;
+}
+
+function applyConversationTemplate() {
+  const template = selectedTemplate();
+  if (!template) return;
+  document.querySelector('#creditIssueCategory').value = template.category;
+  document.querySelector('#suggestedCta').value = template.cta;
+  document.querySelector('#recommendedOffer').value = template.offer;
+  document.querySelector('#publicReply').value = template.reply;
+  document.querySelector('#suggestedFollowUpQuestion').value = template.followUp;
+  const notes = document.querySelector('#notes');
+  notes.value = [notes.value, `Recommended next action: ${template.nextAction}`].filter(Boolean).join('\n');
+}
+
+function buildConversationReply() {
+  const category = document.querySelector('#creditIssueCategory').value || 'General Credit Education';
+  const cta = document.querySelector('#suggestedCta').value || 'Free Credit Audit';
+  const question = document.querySelector('#originalQuestion').value.trim();
+  const summary = document.querySelector('#painPointSummary').value.trim() || 'They need clarity on what is hurting their credit and what to do next.';
+  const templateEntry = Object.values(responseTemplates).find((template) => template[0] === category);
+  const base = templateEntry ? templateToObject(templateEntry) : templateToObject(responseTemplates['Credit repair business question']);
+  const followUp = base.followUp || 'What is your main credit goal right now?';
+  const opener = question ? 'Great question — here is how I would look at it.' : 'Here is how I would look at this.';
+  document.querySelector('#publicReply').value = `${opener} ${base.reply} The reason this matters is because ${summary.charAt(0).toLowerCase()}${summary.slice(1)} A good next step is to look at the full credit picture before guessing or making a move. If you want, I can point you toward the ${cta.toLowerCase()} so you know what to focus on first.`;
+  document.querySelector('#suggestedFollowUpQuestion').value = followUp;
+  if (!document.querySelector('#recommendedOffer').value) document.querySelector('#recommendedOffer').value = base.offer;
+}
+
+
 function resetForm() {
   form.reset();
   document.querySelector('#conversation-id').value = '';
   document.querySelector('#leadTemperature').value = 'Warm';
   document.querySelector('#followUpNeeded').value = 'Yes';
   document.querySelector('#dmSent').value = 'No';
-  document.querySelector('#status').value = 'New';
+  document.querySelector('#convertedToLead').value = 'No';
 }
 
 function saveConversation(event) {
@@ -2179,8 +2251,8 @@ function saveConversation(event) {
 }
 
 function editConversation(id) {
-  const conversation = readStore(CONVERSATIONS_KEY).find((item) => item.id === id);
-  if (!conversation) return;
+  const conversation = normalizeConversation(readStore(CONVERSATIONS_KEY).find((item) => item.id === id));
+  if (!conversation.id) return;
   document.querySelector('#conversation-id').value = conversation.id;
   fields.forEach((field) => {
     document.querySelector(`#${field}`).value = conversation[field] || '';
@@ -2195,8 +2267,8 @@ function deleteConversation(id) {
 
 function convertToLead(id) {
   const conversations = readStore(CONVERSATIONS_KEY);
-  const conversation = conversations.find((item) => item.id === id);
-  if (!conversation) return;
+  const conversation = normalizeConversation(conversations.find((item) => item.id === id));
+  if (!conversation.id) return;
 
   const leads = readStore(LEADS_KEY);
   const alreadyConverted = leads.some((lead) => lead.sourceConversationId === id);
@@ -2206,19 +2278,19 @@ function convertToLead(id) {
       sourceConversationId: id,
       name: conversation.personName,
       source: `${conversation.platform} - ${conversation.groupName}`,
-      painPoint: conversation.painPoint,
+      painPoint: conversation.painPointSummary || conversation.originalQuestion,
       temperature: conversation.leadTemperature,
       followUpDate: conversation.followUpDate,
       status: 'New lead',
       phone: '',
       email: '',
-      notes: conversation.notes,
+      notes: [conversation.notes, conversation.recommendedOffer ? `Recommended offer: ${conversation.recommendedOffer}` : '', conversation.suggestedCta ? `CTA: ${conversation.suggestedCta}` : ''].filter(Boolean).join('\n'),
       createdAt: new Date().toISOString(),
     });
     writeStore(LEADS_KEY, leads);
   }
 
-  const updated = conversations.map((item) => item.id === id ? { ...item, status: 'Converted to lead', dmSent: 'Yes' } : item);
+  const updated = conversations.map((item) => item.id === id ? { ...item, convertedToLead: 'Yes', dmSent: 'Yes' } : item);
   writeStore(CONVERSATIONS_KEY, updated);
   render();
   document.querySelector('[data-tab="leads"]').click();
@@ -2231,20 +2303,24 @@ function detail(label, value) {
 function renderConversationCard(conversation) {
   const template = document.querySelector('#conversation-card-template');
   const card = template.content.cloneNode(true);
+  conversation = normalizeConversation(conversation);
   card.querySelector('.platform').textContent = conversation.platform || 'Platform';
   card.querySelector('.temperature').textContent = conversation.leadTemperature || 'Warm';
   card.querySelector('.person').textContent = conversation.personName || 'Unnamed person';
-  card.querySelector('.group').textContent = conversation.groupName || 'No group name';
+  card.querySelector('.group').textContent = conversation.groupName || 'No group/page name';
   card.querySelector('dl').innerHTML = [
-    detail('Question/Pain Point', conversation.painPoint),
-    detail('My Public Reply', conversation.publicReply),
-    detail('CTA Used', conversation.ctaUsed),
+    detail('Original Question or Comment', conversation.originalQuestion),
+    detail('Credit Issue Category', conversation.creditIssueCategory),
+    detail('Pain Point Summary', conversation.painPointSummary),
+    detail('My Public Educational Reply', conversation.publicReply),
+    detail('Suggested Follow-Up Question', conversation.suggestedFollowUpQuestion),
+    detail('Suggested CTA', conversation.suggestedCta),
+    detail('Recommended Offer', conversation.recommendedOffer),
     detail('Follow-Up Needed', conversation.followUpNeeded),
     detail('Follow-Up Date', formatDate(conversation.followUpDate)),
     detail('DM Sent', conversation.dmSent),
-    detail('Status', conversation.status),
+    detail('Converted To Lead', conversation.convertedToLead),
     detail('Notes', conversation.notes),
-    detail('Screenshot/Link Reference', conversation.reference),
   ].join('');
   card.querySelector('.convert').addEventListener('click', () => convertToLead(conversation.id));
   card.querySelector('.edit').addEventListener('click', () => editConversation(conversation.id));
@@ -2514,6 +2590,9 @@ document.querySelectorAll('.tab').forEach((tab) => {
   });
 });
 
+seedSelect(document.querySelector('#creditIssueCategory'), creditIssueCategories);
+seedSelect(document.querySelector('#suggestedCta'), suggestedCtaOptions);
+seedSelect(document.querySelector('#response-template-select'), Object.keys(responseTemplates), 'Choose a template');
 seedSelect(document.querySelector('#pipelineStage'), pipelineStages);
 seedSelect(pipelineStageFilter, pipelineStages, 'All stages');
 seedSelect(creditGoalFilter, creditGoalOptions, 'All goals');
@@ -2593,6 +2672,8 @@ automationForm.addEventListener('submit', saveAutomation);
 rebuildForm.addEventListener('submit', saveRebuildRoadmap);
 onboardingForm.addEventListener('submit', saveOnboardingRecord);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
+document.querySelector('#apply-response-template').addEventListener('click', applyConversationTemplate);
+document.querySelector('#build-response').addEventListener('click', buildConversationReply);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);

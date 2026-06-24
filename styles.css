@@ -808,3 +808,35 @@ button:disabled {
   .rebuild-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .action-status-list li { grid-template-columns: 1fr 190px; align-items: center; }
 }
+
+.response-builder {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, #eff6ff, #ffffff);
+  box-shadow: var(--shadow);
+}
+.response-builder h3 { margin-bottom: .5rem; }
+.response-builder ul {
+  display: grid;
+  gap: .45rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #344054;
+  font-weight: 700;
+}
+.builder-actions {
+  display: grid;
+  gap: .75rem;
+  align-content: start;
+}
+.conversation-intelligence-form textarea#publicReply { min-height: 170px; }
+.conversation-card dl { grid-template-columns: 1fr; }
+.conversation-card dd { white-space: pre-wrap; }
+
+@media (min-width: 720px) {
+  .response-builder { grid-template-columns: 1.4fr .9fr; align-items: start; }
+}
