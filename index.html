@@ -32,7 +32,7 @@
       <button class="tab" type="button" data-tab="team">Team</button>
       <button class="tab" type="button" data-tab="content">Content</button>
       <button class="tab" type="button" data-tab="automations">Automations</button>
-      <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
+      <button class="tab" type="button" data-tab="group-conversations">Credit Conversations</button>
     </nav>
 
     <main>
@@ -982,63 +982,63 @@
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
         <div class="section-header">
           <div>
-            <p class="eyebrow">Community tracking</p>
-            <h2 id="group-conversations-heading">Group Conversations</h2>
+            <p class="eyebrow">Conversation intelligence</p>
+            <h2 id="group-conversations-heading">Credit Conversation Intelligence Center</h2>
+            <p>Capture credit questions from Facebook groups, Skool, Instagram, DMs, and comments. Turn the pain point into an educational public reply and the right soft CTA.</p>
           </div>
           <span id="conversation-count" class="count-pill">0 conversations</span>
         </div>
 
-        <form id="conversation-form" class="tracker-form">
+        <div class="response-builder">
+          <div>
+            <p class="eyebrow">Reply assistant</p>
+            <h3>Response Builder Rules</h3>
+            <ul>
+              <li>Answer the person’s question directly, then educate in simple terms.</li>
+              <li>Explain why the issue matters without overpromising or giving legal advice.</li>
+              <li>Ask one smart follow-up question and end with a soft CTA.</li>
+              <li>Keep it confident, relatable, helpful, and human.</li>
+            </ul>
+          </div>
+          <div class="builder-actions">
+            <label>Saved Response Template
+              <select id="response-template-select">
+                <option value="">Choose a template</option>
+              </select>
+            </label>
+            <button id="apply-response-template" class="secondary" type="button">Apply Template</button>
+            <button id="build-response" class="primary" type="button">Build Reply From Conversation</button>
+          </div>
+        </div>
+
+        <form id="conversation-form" class="tracker-form conversation-intelligence-form">
           <input type="hidden" id="conversation-id" />
           <div class="form-grid">
-            <label>Platform<input id="platform" name="platform" placeholder="Facebook, Instagram, LinkedIn" required /></label>
-            <label>Group Name<input id="groupName" name="groupName" placeholder="Wellness Moms Network" required /></label>
+            <label>Platform<input id="platform" name="platform" placeholder="Facebook, Skool, Instagram, DM, comment" required /></label>
+            <label>Group/Page Name<input id="groupName" name="groupName" placeholder="Credit education group or page" required /></label>
             <label>Person Name<input id="personName" name="personName" placeholder="Jane Smith" required /></label>
-            <label>CTA Used<input id="ctaUsed" name="ctaUsed" placeholder="Comment WELLNESS / DM me" /></label>
-            <label>Lead Temperature
-              <select id="leadTemperature" name="leadTemperature">
-                <option value="Cold">Cold</option>
-                <option value="Warm" selected>Warm</option>
-                <option value="Hot">Hot</option>
-              </select>
-            </label>
-            <label>Follow-Up Needed
-              <select id="followUpNeeded" name="followUpNeeded">
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </label>
+            <label>Credit Issue Category<select id="creditIssueCategory" name="creditIssueCategory"></select></label>
+            <label>Suggested CTA<select id="suggestedCta" name="suggestedCta"></select></label>
+            <label>Recommended Offer<input id="recommendedOffer" name="recommendedOffer" placeholder="Credit audit, Skool, program, mentorship" /></label>
+            <label>Lead Temperature<select id="leadTemperature" name="leadTemperature"><option value="Cold">Cold</option><option value="Warm" selected>Warm</option><option value="Hot">Hot</option></select></label>
+            <label>Follow-Up Needed<select id="followUpNeeded" name="followUpNeeded"><option value="Yes">Yes</option><option value="No">No</option></select></label>
             <label>Follow-Up Date<input id="followUpDate" name="followUpDate" type="date" /></label>
-            <label>DM Sent
-              <select id="dmSent" name="dmSent">
-                <option value="No">No</option>
-                <option value="Yes">Yes</option>
-              </select>
-            </label>
-            <label>Status
-              <select id="status" name="status">
-                <option value="New">New</option>
-                <option value="Replied">Replied</option>
-                <option value="Follow-up scheduled">Follow-up scheduled</option>
-                <option value="Converted to lead">Converted to lead</option>
-                <option value="Closed">Closed</option>
-              </select>
-            </label>
-            <label>Screenshot/Link Reference<input id="reference" name="reference" placeholder="https://... or screenshot filename" /></label>
+            <label>DM Sent<select id="dmSent" name="dmSent"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Converted To Lead<select id="convertedToLead" name="convertedToLead"><option value="No">No</option><option value="Yes">Yes</option></select></label>
           </div>
-          <label>Question/Pain Point<textarea id="painPoint" name="painPoint" placeholder="What did they ask or struggle with?" required></textarea></label>
-          <label>My Public Reply<textarea id="publicReply" name="publicReply" placeholder="Paste your public comment reply"></textarea></label>
-          <label>Notes<textarea id="notes" name="notes" placeholder="Context, next steps, objections, reminders"></textarea></label>
+          <label>Original Question or Comment<textarea id="originalQuestion" name="originalQuestion" placeholder="Paste the exact credit question or comment here" required></textarea></label>
+          <label>Pain Point Summary<textarea id="painPointSummary" name="painPointSummary" placeholder="Summarize what they are really struggling with"></textarea></label>
+          <label>My Public Educational Reply<textarea id="publicReply" name="publicReply" placeholder="Use the response builder or write your public educational comment"></textarea></label>
+          <label>Suggested Follow-Up Question<textarea id="suggestedFollowUpQuestion" name="suggestedFollowUpQuestion" placeholder="Ask one smart question that moves the conversation forward"></textarea></label>
+          <label>Notes<textarea id="notes" name="notes" placeholder="Context, buying signals, objections, reminders"></textarea></label>
           <div class="form-actions">
-            <button class="primary" type="submit">Save Conversation</button>
+            <button class="primary" type="submit">Save Credit Conversation</button>
             <button id="reset-form" class="secondary" type="button">Clear</button>
           </div>
         </form>
 
         <div id="conversation-list" class="card-grid empty-state"></div>
       </section>
-    </main>
-
     <template id="conversation-card-template">
       <article class="card conversation-card">
         <div class="card-topline">
