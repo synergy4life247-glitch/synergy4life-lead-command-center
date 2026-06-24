@@ -17,6 +17,22 @@ const AUTOMATIONS_KEY = 'synergy4life.automations';
 const ONBOARDING_KEY = 'synergy4life.onboarding';
 const DISPUTES_KEY = 'synergy4life.disputeCenter';
 const REBUILD_CENTER_KEY = 'synergy4life.positiveCreditRebuildCenter';
+const STORE_ALIASES = {
+  [CONVERSATIONS_KEY]: ['synergy4life.conversations', 'synergy4life.creditConversations'],
+  [PIPELINE_KEY]: ['synergy4life.pipelineLeads', 'synergy4life.leadPipeline'],
+  [CREDIT_FILES_KEY]: ['synergy4life.creditFileCenter'],
+  [MORTGAGE_READINESS_KEY]: ['synergy4life.mortgageReady', 'synergy4life.mortgageReadyCenter'],
+  [CREDIT_INTELLIGENCE_KEY]: ['synergy4life.creditIntelligenceCenter'],
+  [DOCUMENTS_KEY]: ['synergy4life.documentsCenter', 'synergy4life.documentCenter'],
+  [COMMUNICATIONS_KEY]: ['synergy4life.communicationCenter'],
+  [REVENUE_CENTER_KEY]: ['synergy4life.revenue', 'synergy4life.financials'],
+  [TEAM_KEY]: ['synergy4life.team', 'synergy4life.teamCenter'],
+  [CONTENT_KEY]: ['synergy4life.content', 'synergy4life.contentPlanner'],
+  [AUTOMATIONS_KEY]: ['synergy4life.automationCenter'],
+  [ONBOARDING_KEY]: ['synergy4life.onboardingCenter'],
+  [DISPUTES_KEY]: ['synergy4life.disputes'],
+  [REBUILD_CENTER_KEY]: ['synergy4life.rebuildCenter', 'synergy4life.positiveRebuildCenter'],
+};
 
 const fields = [
   'platform', 'groupName', 'personName', 'originalQuestion', 'creditIssueCategory', 'painPointSummary',
@@ -255,9 +271,33 @@ const rebuildStatusFilter = document.querySelector('#rebuild-status-filter');
 const rebuildPreview = document.querySelector('#rebuild-preview');
 const rebuildDeficiencyOptions = document.querySelector('#rebuild-deficiency-options');
 
-const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
+function parseStoreValue(value, fallback = []) {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(fallback) && !Array.isArray(parsed) ? fallback : parsed;
+  } catch (error) {
+    console.warn('Ignoring invalid Synergy4Life localStorage value.', error);
+    return fallback;
+  }
+}
+
+function readStore(key, fallback = []) {
+  const primary = localStorage.getItem(key);
+  if (primary !== null) return parseStoreValue(primary, fallback);
+  const alias = (STORE_ALIASES[key] || []).find((legacyKey) => localStorage.getItem(legacyKey) !== null);
+  if (!alias) return fallback;
+  const migrated = parseStoreValue(localStorage.getItem(alias), fallback);
+  writeStore(key, migrated);
+  return migrated;
+}
+
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
-const formatDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString() : 'Not set';
+const formatDate = (value) => {
+  if (!value) return 'Not set';
+  const date = new Date(String(value).includes('T') ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? 'Not set' : date.toLocaleDateString();
+};
 const formatCurrency = (value) => Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 const todayDateString = () => new Date().toISOString().slice(0, 10);
 const asNumber = (value) => Number(value || 0);
@@ -265,7 +305,11 @@ const average = (values) => values.length ? values.reduce((sum, value) => sum + 
 const formatPercent = (value) => `${Math.round(value)}%`;
 const isTaskOverdue = (task) => task.taskStatus !== 'Completed' && task.taskDueDate && task.taskDueDate < todayDateString();
 const isFollowUpDue = (value) => value && value <= todayDateString();
-const formatDateTime = (value) => value ? new Date(value).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Not set';
+const formatDateTime = (value) => {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Not set' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+};
 
 const isThisMonth = (value) => {
   if (!value) return false;
