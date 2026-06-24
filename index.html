@@ -15,7 +15,8 @@
     </header>
 
     <nav class="tabs" aria-label="Primary navigation">
-      <button class="tab active" type="button" data-tab="leads">Leads</button>
+      <button class="tab active" type="button" data-tab="dashboard">Home Dashboard</button>
+      <button class="tab" type="button" data-tab="leads">Leads</button>
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
@@ -26,7 +27,38 @@
     </nav>
 
     <main>
-      <section id="leads" class="panel active" aria-labelledby="leads-heading">
+      <section id="dashboard" class="panel active" aria-labelledby="dashboard-heading">
+        <div class="dashboard-hero">
+          <div>
+            <p class="eyebrow">CEO command view</p>
+            <h2 id="dashboard-heading">Home Dashboard</h2>
+            <p>Real-time Synergy4Life performance metrics from leads, clients, tasks, credit files, pipeline, and finance activity.</p>
+          </div>
+          <span id="dashboard-updated" class="count-pill">Updated now</span>
+        </div>
+
+        <div class="quick-actions" aria-label="Quick actions">
+          <button class="primary quick-action" type="button" data-target-tab="pipeline">Add Lead</button>
+          <button class="primary quick-action" type="button" data-target-tab="clients">Add Client</button>
+          <button class="primary quick-action" type="button" data-target-tab="credit-files">Add Credit File</button>
+          <button class="primary quick-action" type="button" data-target-tab="tasks">Add Task</button>
+          <button class="secondary quick-action" type="button" data-target-tab="tasks">Add Follow Up</button>
+        </div>
+
+        <div id="dashboard-sections" class="dashboard-sections" aria-live="polite"></div>
+
+        <section class="dashboard-widget activity-widget" aria-labelledby="activity-heading">
+          <div class="dashboard-widget-header">
+            <div>
+              <p class="eyebrow">Activity feed</p>
+              <h3 id="activity-heading">Recent Activity Timeline</h3>
+            </div>
+          </div>
+          <div id="activity-feed" class="activity-feed"></div>
+        </section>
+      </section>
+
+      <section id="leads" class="panel" aria-labelledby="leads-heading">
         <div class="section-header">
           <div>
             <p class="eyebrow">Pipeline</p>

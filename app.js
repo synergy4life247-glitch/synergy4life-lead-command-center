@@ -7,6 +7,7 @@ const CREDIT_FILES_KEY = 'synergy4life.creditFiles';
 const TASKS_KEY = 'synergy4life.tasks';
 const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
+const DASHBOARD_KEY = 'synergy4life.dashboard';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -93,6 +94,9 @@ const taskSearch = document.querySelector('#task-search');
 const taskStatusFilter = document.querySelector('#task-status-filter');
 const taskPriorityFilter = document.querySelector('#task-priority-filter');
 const taskSourceFilter = document.querySelector('#task-source-filter');
+const dashboardSections = document.querySelector('#dashboard-sections');
+const activityFeed = document.querySelector('#activity-feed');
+const dashboardUpdated = document.querySelector('#dashboard-updated');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -103,6 +107,15 @@ const asNumber = (value) => Number(value || 0);
 const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 const formatPercent = (value) => `${Math.round(value)}%`;
 const isTaskOverdue = (task) => task.taskStatus !== 'Completed' && task.taskDueDate && task.taskDueDate < todayDateString();
+
+const isThisMonth = (value) => {
+  if (!value) return false;
+  const date = new Date(value);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+};
+const daysUntil = (value) => value ? Math.ceil((new Date(`${value}T00:00:00`) - new Date(`${todayDateString()}T00:00:00`)) / 86400000) : null;
+
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 })[char]);
@@ -1082,6 +1095,71 @@ function renderLeadCard(lead) {
   return card;
 }
 
+
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence }) {
+  const totalLeadCount = leads.length + pipelineLeads.length;
+  const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
+  const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
+  const activeClients = clients.filter((client) => client.paymentStatus !== 'Paused').length;
+  const clientsReadyForMortgage = clients.filter((client) => client.mortgageReady === 'Yes').length + creditFiles.filter((file) => file.creditMortgageReady === 'Yes').length;
+  const creditScores = creditFiles.flatMap((file) => [file.scoreEq, file.scoreEx, file.scoreTu].map(asNumber).filter(Boolean));
+  const readinessScores = [
+    ...mortgageReadiness.map((item) => calculateMortgageReadiness(item).readinessScore),
+    ...creditIntelligence.map((item) => calculateCreditIntelligence(item).readinessScore),
+  ].filter((score) => score || score === 0);
+  const highRiskProfiles = creditFiles.filter((file) => {
+    const avgScore = average([file.scoreEq, file.scoreEx, file.scoreTu].map(asNumber).filter(Boolean));
+    return file.creditStatus === 'Escalated' || (avgScore && avgScore < 580) || [file.collections, file.chargeOffs, file.repossessions, file.bankruptcy].some(Boolean);
+  }).length + creditIntelligence.filter((item) => ['Poor', 'Critical'].includes(calculateCreditIntelligence(item).status)).length;
+  const estimatedRevenue = pipelineLeads.reduce((sum, lead) => sum + asNumber(lead.pipelineValue), 0);
+  const closedDeals = pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
+  const monthlyInitialFees = clients.filter((client) => isThisMonth(client.enrollmentDate || client.createdAt)).reduce((sum, client) => sum + asNumber(client.initialFee), 0);
+  const monthlyRecurringRevenue = clients.filter((client) => client.paymentStatus === 'Current').reduce((sum, client) => sum + asNumber(client.monthlyFee), 0);
+  const monthlyRevenue = monthlyInitialFees + monthlyRecurringRevenue;
+  const projectedRevenue = monthlyRevenue + pipelineLeads.filter((lead) => !['Enrolled', 'Active Client', 'Lost Lead'].includes(lead.pipelineStage)).reduce((sum, lead) => sum + asNumber(lead.pipelineValue), 0);
+  const upcomingFollowUps = [
+    ...tasks.filter((task) => task.taskStatus !== 'Completed' && daysUntil(task.taskDueDate) !== null && daysUntil(task.taskDueDate) > 0 && daysUntil(task.taskDueDate) <= 14),
+    ...clients.filter((client) => daysUntil(client.nextFollowUpDate) !== null && daysUntil(client.nextFollowUpDate) >= 0 && daysUntil(client.nextFollowUpDate) <= 14),
+    ...creditFiles.filter((file) => daysUntil(file.creditFollowUpDate) !== null && daysUntil(file.creditFollowUpDate) >= 0 && daysUntil(file.creditFollowUpDate) <= 14),
+  ].length;
+  return {
+    leads: [ ['Total Leads', totalLeadCount], ['Hot Leads', hotLeads], ['Cold Leads', coldLeads], ['Leads Added This Month', leads.filter((lead) => isThisMonth(lead.createdAt)).length + pipelineLeads.filter((lead) => isThisMonth(lead.createdAt)).length] ],
+    clients: [ ['Active Clients', activeClients], ['New Clients This Month', clients.filter((client) => isThisMonth(client.enrollmentDate || client.createdAt)).length], ['Clients Ready for Mortgage', clientsReadyForMortgage], ['Clients in Escalation', clients.filter((client) => client.paymentStatus === 'Past Due').length + creditFiles.filter((file) => file.creditStatus === 'Escalated').length] ],
+    tasks: [ ['Tasks Due Today', tasks.filter((task) => task.taskDueDate === todayDateString() && task.taskStatus !== 'Completed').length], ['Overdue Tasks', tasks.filter((task) => task.taskStatus === 'Overdue').length], ['Upcoming Follow Ups', upcomingFollowUps] ],
+    creditFiles: [ ['Total Credit Files', creditFiles.length], ['Average Client Score', Math.round(average(creditScores))], ['Average Readiness Score', Math.round(average(readinessScores))], ['High Risk Profiles', highRiskProfiles] ],
+    pipeline: [ ['Leads by Stage', pipelineStages.map((stage) => `${stage}: ${pipelineLeads.filter((lead) => lead.pipelineStage === stage).length}`).join(' • ')], ['Estimated Revenue', formatCurrency(estimatedRevenue)], ['Closed Deals', closedDeals], ['Conversion Rate', formatPercent(totalLeadCount ? (closedDeals / totalLeadCount) * 100 : 0)] ],
+    financial: [ ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Monthly Initial Fees Collected', formatCurrency(monthlyInitialFees)], ['Monthly Recurring Revenue', formatCurrency(monthlyRecurringRevenue)], ['Projected Revenue', formatCurrency(projectedRevenue)] ],
+  };
+}
+
+function collectActivity({ leads, clients, pipelineLeads, creditFiles, tasks }) {
+  return [
+    ...leads.map((lead) => ({ type: 'New lead added', title: lead.name || 'Unnamed lead', detail: lead.source || 'Converted lead', date: lead.createdAt })),
+    ...pipelineLeads.map((lead) => ({ type: lead.updatedAt && lead.updatedAt !== lead.createdAt ? 'Lead moved in pipeline' : 'New lead added', title: lead.pipelineName || 'Unnamed lead', detail: lead.pipelineStage || 'New Lead', date: lead.updatedAt || lead.createdAt })),
+    ...clients.map((client) => ({ type: 'Client added', title: client.fullName || 'Unnamed client', detail: client.clientGoal || 'Client record', date: client.createdAt })),
+    ...creditFiles.map((file) => ({ type: 'Credit file updated', title: file.creditClientName || 'Unnamed client', detail: file.creditStatus || 'Credit file', date: file.updatedAt || file.createdAt })),
+    ...tasks.filter((task) => task.taskStatus === 'Completed').map((task) => ({ type: 'Task completed', title: task.taskTitle || 'Task', detail: task.taskPerson || task.taskSource || 'Follow-up center', date: task.updatedAt || task.createdAt })),
+  ].filter((item) => item.date).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
+}
+
+function renderDashboard(data) {
+  const metrics = calculateDashboardMetrics(data);
+  const groups = [
+    ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks],
+    ['CREDIT FILES', metrics.creditFiles], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
+  ];
+  dashboardSections.innerHTML = groups.map(([title, items]) => `
+    <section class="dashboard-widget ${title === 'PIPELINE' || title === 'FINANCIAL METRICS' ? 'wide-widget' : ''}">
+      <div class="dashboard-widget-header"><h3>${escapeHtml(title)}</h3></div>
+      <div class="metrics-grid">${items.map(([label, value]) => `<article class="metric-card dashboard-metric-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('')}</div>
+    </section>`).join('');
+  const activity = collectActivity(data);
+  activityFeed.innerHTML = activity.length ? activity.map((item) => `
+    <article class="activity-item"><span class="activity-dot"></span><div><h4>${escapeHtml(item.type)}</h4><p>${escapeHtml(item.title)} — ${escapeHtml(item.detail)}</p><span class="activity-time">${new Date(item.date).toLocaleString()}</span></div></article>`).join('') : '<p class="empty-message">No recent activity yet. Use a quick action to start building your command center.</p>';
+  dashboardUpdated.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  writeStore(DASHBOARD_KEY, { metrics, activity, updatedAt: new Date().toISOString() });
+}
+
 function render() {
   const conversations = readStore(CONVERSATIONS_KEY);
   const leads = readStore(LEADS_KEY);
@@ -1106,6 +1184,7 @@ function render() {
   renderTaskMetrics(tasks);
   renderCreditIntelligenceMetrics(creditIntelligence);
   renderMortgageMetrics(mortgageReadiness);
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -1145,6 +1224,14 @@ function render() {
   if (!filteredCreditFiles.length) creditFileList.innerHTML = '<p class="empty-message">No credit files match your current view. Add a credit repair client or adjust your filters.</p>';
   filteredCreditFiles.forEach((file) => creditFileList.append(renderCreditFileCard(file)));
 }
+
+document.querySelectorAll('.quick-action').forEach((button) => {
+  button.addEventListener('click', () => {
+    const tab = document.querySelector(`[data-tab="${button.dataset.targetTab}"]`);
+    tab?.click();
+    document.querySelector(`#${button.dataset.targetTab} form`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
 
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
