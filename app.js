@@ -8,6 +8,7 @@ const TASKS_KEY = 'synergy4life.tasks';
 const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 const DASHBOARD_KEY = 'synergy4life.dashboard';
+const DOCUMENTS_KEY = 'synergy4life.documents';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -51,6 +52,9 @@ const taskSourceOptions = ['Leads', 'Clients', 'Group Conversations', 'Pipeline 
 const taskTypeOptions = ['Call', 'Text', 'Email', 'Follow-Up', 'Dispute Round', 'Credit File Review', 'Mortgage Check-In', 'Real Estate Follow-Up', 'Skool Follow-Up', 'Payment Follow-Up'];
 const taskPriorityOptions = ['Low', 'Medium', 'High', 'Urgent'];
 const taskStatusOptions = ['Pending', 'Completed', 'Overdue'];
+const documentCategories = ['ID', 'Social Security Card', 'Utility Bill', 'Credit Report', 'Dispute Letter', 'Bureau Response', 'CFPB Complaint', 'FTC Complaint', 'Attorney Letter', 'Mortgage Documents', 'Income Documents', 'Closing Documents', 'Other'];
+const documentStatusOptions = ['Pending Review', 'Reviewed', 'Sent', 'Archived'];
+const documentFields = ['documentClientName', 'documentName', 'documentCategory', 'documentUploadDate', 'documentStatus', 'documentNotes'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -97,6 +101,13 @@ const taskSourceFilter = document.querySelector('#task-source-filter');
 const dashboardSections = document.querySelector('#dashboard-sections');
 const activityFeed = document.querySelector('#activity-feed');
 const dashboardUpdated = document.querySelector('#dashboard-updated');
+const documentForm = document.querySelector('#document-form');
+const documentList = document.querySelector('#document-list');
+const documentCount = document.querySelector('#document-count');
+const documentSearch = document.querySelector('#document-search');
+const documentCategoryFilter = document.querySelector('#document-category-filter');
+const documentClientFilter = document.querySelector('#document-client-filter');
+const documentClientCounts = document.querySelector('#document-client-counts');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -476,6 +487,124 @@ function getTaskFormData() {
     data[field] = document.querySelector(`#${field}`).value.trim();
     return data;
   }, {});
+}
+
+function getDocumentFormData() {
+  return documentFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetDocumentForm() {
+  documentForm.reset();
+  document.querySelector('#document-id').value = '';
+  document.querySelector('#documentUploadDate').value = todayDateString();
+  document.querySelector('#documentCategory').value = 'ID';
+  document.querySelector('#documentStatus').value = 'Pending Review';
+}
+
+async function saveDocument(event) {
+  event.preventDefault();
+  const documents = readStore(DOCUMENTS_KEY);
+  const id = document.querySelector('#document-id').value || crypto.randomUUID();
+  const existing = documents.findIndex((document) => document.id === id);
+  const file = document.querySelector('#documentFile').files[0];
+  const previous = existing >= 0 ? documents[existing] : {};
+  const record = {
+    id,
+    ...getDocumentFormData(),
+    fileName: file ? file.name : (previous.fileName || ''),
+    fileType: file ? file.type : (previous.fileType || ''),
+    fileData: file ? await readFileAsDataUrl(file) : (previous.fileData || ''),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? documents[existing].createdAt : new Date().toISOString(),
+  };
+  if (existing >= 0) documents[existing] = record;
+  else documents.unshift(record);
+  writeStore(DOCUMENTS_KEY, documents);
+  resetDocumentForm();
+  render();
+}
+
+function editDocument(id) {
+  const documentRecord = readStore(DOCUMENTS_KEY).find((item) => item.id === id);
+  if (!documentRecord) return;
+  document.querySelector('#document-id').value = documentRecord.id;
+  documentFields.forEach((field) => document.querySelector(`#${field}`).value = documentRecord[field] || '');
+  document.querySelector('[data-tab="documents"]').click();
+  documentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteDocument(id) {
+  writeStore(DOCUMENTS_KEY, readStore(DOCUMENTS_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function getFilteredDocuments(documents) {
+  const query = documentSearch.value.trim().toLowerCase();
+  return documents.filter((documentRecord) => {
+    const searchable = [documentRecord.documentClientName, documentRecord.documentName, documentRecord.documentCategory, documentRecord.documentStatus, documentRecord.documentNotes, documentRecord.fileName].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!documentCategoryFilter.value || documentRecord.documentCategory === documentCategoryFilter.value)
+      && (!documentClientFilter.value || documentRecord.documentClientName === documentClientFilter.value);
+  });
+}
+
+function updateDocumentClientFilter(documents) {
+  const selected = documentClientFilter.value;
+  const clients = [...new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean))].sort();
+  seedSelect(documentClientFilter, clients, 'All clients');
+  documentClientFilter.value = clients.includes(selected) ? selected : '';
+}
+
+function renderDocumentMetrics(documents) {
+  document.querySelector('#metric-documents-total').textContent = documents.length;
+  document.querySelector('#metric-documents-pending').textContent = documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length;
+  document.querySelector('#metric-documents-today').textContent = documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length;
+  const byCategory = documentCategories.map((category) => `${category}: ${documents.filter((documentRecord) => documentRecord.documentCategory === category).length}`).filter((item) => !item.endsWith(': 0'));
+  document.querySelector('#metric-documents-category').textContent = byCategory.length ? byCategory.join(' • ') : '—';
+}
+
+function renderDocumentClientCounts(documents) {
+  const counts = documents.reduce((totals, documentRecord) => {
+    const client = documentRecord.documentClientName || 'Unassigned';
+    totals[client] = (totals[client] || 0) + 1;
+    return totals;
+  }, {});
+  documentClientCounts.innerHTML = Object.entries(counts).length ? Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([client, count]) => `<span class="count-pill">${escapeHtml(client)}: ${count}</span>`).join('') : '<p class="empty-message">No client document counts yet.</p>';
+}
+
+function renderDocumentCard(documentRecord) {
+  const card = document.createElement('article');
+  card.className = 'card document-card';
+  const hasFile = Boolean(documentRecord.fileData);
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(documentRecord.documentCategory || 'Other')}</span><span class="badge">${escapeHtml(documentRecord.documentStatus || 'Pending Review')}</span></div>
+    <h3>${escapeHtml(documentRecord.documentName || 'Untitled document')}</h3>
+    <p class="group">${escapeHtml(documentRecord.documentClientName || 'No client')} • ${escapeHtml(documentRecord.fileName || 'No file attached')}</p>
+    <dl>
+      ${detail('Upload Date', formatDate(documentRecord.documentUploadDate))}
+      ${detail('Notes', documentRecord.documentNotes)}
+    </dl>
+    <div class="document-preview">${hasFile && (documentRecord.fileType || '').startsWith('image/') ? `<img src="${documentRecord.fileData}" alt="Preview of ${escapeHtml(documentRecord.documentName)}" />` : hasFile ? `<iframe title="Preview of ${escapeHtml(documentRecord.documentName)}" src="${documentRecord.fileData}"></iframe>` : '<p class="empty-message">No preview available until a file is uploaded.</p>'}</div>
+    <div class="card-actions">
+      <a class="button-link primary" href="${hasFile ? documentRecord.fileData : '#'}" download="${escapeHtml(documentRecord.fileName || documentRecord.documentName || 'document')}" ${hasFile ? '' : 'aria-disabled="true"'}>Download</a>
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.querySelector('.edit').addEventListener('click', () => editDocument(documentRecord.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteDocument(documentRecord.id));
+  return card;
 }
 
 function normalizeTask(task) {
@@ -1096,7 +1225,7 @@ function renderLeadCard(lead) {
 }
 
 
-function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence }) {
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents }) {
   const totalLeadCount = leads.length + pipelineLeads.length;
   const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
@@ -1128,6 +1257,7 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
     tasks: [ ['Tasks Due Today', tasks.filter((task) => task.taskDueDate === todayDateString() && task.taskStatus !== 'Completed').length], ['Overdue Tasks', tasks.filter((task) => task.taskStatus === 'Overdue').length], ['Upcoming Follow Ups', upcomingFollowUps] ],
     creditFiles: [ ['Total Credit Files', creditFiles.length], ['Average Client Score', Math.round(average(creditScores))], ['Average Readiness Score', Math.round(average(readinessScores))], ['High Risk Profiles', highRiskProfiles] ],
     pipeline: [ ['Leads by Stage', pipelineStages.map((stage) => `${stage}: ${pipelineLeads.filter((lead) => lead.pipelineStage === stage).length}`).join(' • ')], ['Estimated Revenue', formatCurrency(estimatedRevenue)], ['Closed Deals', closedDeals], ['Conversion Rate', formatPercent(totalLeadCount ? (closedDeals / totalLeadCount) * 100 : 0)] ],
+    documents: [ ['Total Documents', documents.length], ['Pending Review', documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length], ['Uploaded Today', documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length], ['Document Clients', new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean)).size] ],
     financial: [ ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Monthly Initial Fees Collected', formatCurrency(monthlyInitialFees)], ['Monthly Recurring Revenue', formatCurrency(monthlyRecurringRevenue)], ['Projected Revenue', formatCurrency(projectedRevenue)] ],
   };
 }
@@ -1146,7 +1276,7 @@ function renderDashboard(data) {
   const metrics = calculateDashboardMetrics(data);
   const groups = [
     ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks],
-    ['CREDIT FILES', metrics.creditFiles], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
+    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
   ];
   dashboardSections.innerHTML = groups.map(([title, items]) => `
     <section class="dashboard-widget ${title === 'PIPELINE' || title === 'FINANCIAL METRICS' ? 'wide-widget' : ''}">
@@ -1169,6 +1299,7 @@ function render() {
   const tasks = getTasks();
   const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
+  const documents = readStore(DOCUMENTS_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1177,6 +1308,7 @@ function render() {
   taskCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
   creditIntelligenceCount.textContent = `${creditIntelligence.length} report${creditIntelligence.length === 1 ? '' : 's'}`;
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
+  documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1184,7 +1316,10 @@ function render() {
   renderTaskMetrics(tasks);
   renderCreditIntelligenceMetrics(creditIntelligence);
   renderMortgageMetrics(mortgageReadiness);
-  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence });
+  updateDocumentClientFilter(documents);
+  renderDocumentMetrics(documents);
+  renderDocumentClientCounts(documents);
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -1193,6 +1328,7 @@ function render() {
   creditIntelligenceList.innerHTML = '';
   mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
+  documentList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -1210,6 +1346,10 @@ function render() {
   const filteredClients = getFilteredClients(clients);
   if (!filteredClients.length) clientList.innerHTML = '<p class="empty-message">No clients match your current view. Add a client or adjust your filters.</p>';
   filteredClients.forEach((client) => clientList.append(renderClientCard(client)));
+
+  const filteredDocuments = getFilteredDocuments(documents);
+  if (!filteredDocuments.length) documentList.innerHTML = '<p class="empty-message">No documents match your current view. Upload a document or adjust your filters.</p>';
+  filteredDocuments.forEach((documentRecord) => documentList.append(renderDocumentCard(documentRecord)));
 
   const filteredTasks = getFilteredTasks(tasks);
   const overdueTasks = filteredTasks.filter((task) => task.taskStatus === 'Overdue');
@@ -1254,6 +1394,9 @@ seedSelect(document.querySelector('#taskStatus'), taskStatusOptions);
 seedSelect(taskStatusFilter, taskStatusOptions, 'All statuses');
 seedSelect(taskPriorityFilter, taskPriorityOptions, 'All priorities');
 seedSelect(taskSourceFilter, taskSourceOptions, 'All source modules');
+seedSelect(document.querySelector('#documentCategory'), documentCategories);
+seedSelect(document.querySelector('#documentStatus'), documentStatusOptions);
+seedSelect(documentCategoryFilter, documentCategories, 'All categories');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
@@ -1262,12 +1405,14 @@ creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
+documentForm.addEventListener('submit', saveDocument);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
 document.querySelector('#reset-credit-intelligence-form').addEventListener('click', resetCreditIntelligenceForm);
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
+document.querySelector('#reset-document-form').addEventListener('click', resetDocumentForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -1284,8 +1429,11 @@ pipelineSourceFilter.addEventListener('input', render);
 pipelineStageFilter.addEventListener('change', render);
 creditFileSearch.addEventListener('input', render);
 taskSearch.addEventListener('input', render);
+documentSearch.addEventListener('input', render);
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
+[documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 updateCreditIntelligencePreview();
+resetDocumentForm();
 render();
