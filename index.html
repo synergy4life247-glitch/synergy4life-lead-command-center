@@ -19,6 +19,7 @@
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+      <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
@@ -245,6 +246,57 @@
         </div>
 
         <div id="credit-file-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="mortgage-ready" class="panel" aria-labelledby="mortgage-ready-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Mortgage intelligence</p>
+            <h2 id="mortgage-ready-heading">Mortgage Readiness Intelligence</h2>
+          </div>
+          <span id="mortgage-readiness-count" class="count-pill">0 evaluations</span>
+        </div>
+
+        <div class="metrics-grid mortgage-metrics" aria-label="Mortgage readiness dashboard metrics">
+          <article class="metric-card"><span>Mortgage Ready Clients</span><strong id="metric-mri-ready">0</strong></article>
+          <article class="metric-card"><span>Clients Needing Improvement</span><strong id="metric-mri-improvement">0</strong></article>
+          <article class="metric-card"><span>Average Client Score</span><strong id="metric-mri-score">0</strong></article>
+          <article class="metric-card"><span>Average DTI</span><strong id="metric-mri-dti">0%</strong></article>
+        </div>
+
+        <form id="mortgage-readiness-form" class="tracker-form mortgage-form">
+          <input type="hidden" id="mortgage-readiness-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="mortgageClientName" name="mortgageClientName" placeholder="Jane Smith" required /></label>
+            <label>Equifax Score<input id="mortgageScoreEq" name="mortgageScoreEq" type="number" min="300" max="850" placeholder="640" /></label>
+            <label>Experian Score<input id="mortgageScoreEx" name="mortgageScoreEx" type="number" min="300" max="850" placeholder="650" /></label>
+            <label>TransUnion Score<input id="mortgageScoreTu" name="mortgageScoreTu" type="number" min="300" max="850" placeholder="645" /></label>
+            <label>Desired Loan Type<select id="desiredLoanType" name="desiredLoanType"></select></label>
+            <label>Target Purchase Price<input id="targetPurchasePrice" name="targetPurchasePrice" type="number" min="0" step="1000" placeholder="300000" /></label>
+            <label>Estimated Income<input id="estimatedIncome" name="estimatedIncome" type="number" min="0" step="100" placeholder="72000" /></label>
+            <label>Current Monthly Debt<input id="currentMonthlyDebt" name="currentMonthlyDebt" type="number" min="0" step="25" placeholder="850" /></label>
+            <label>Down Payment Available<input id="downPaymentAvailable" name="downPaymentAvailable" type="number" min="0" step="100" placeholder="12000" /></label>
+            <label>Bankruptcy History<select id="bankruptcyHistory" name="bankruptcyHistory"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Foreclosure History<select id="foreclosureHistory" name="foreclosureHistory"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Late Payments Last 24 Months<input id="latePayments24Months" name="latePayments24Months" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Utilization Percentage<input id="utilizationPercentage" name="utilizationPercentage" type="number" min="0" max="200" step="1" placeholder="28" /></label>
+            <label>Total Active Tradelines<input id="totalActiveTradelines" name="totalActiveTradelines" type="number" min="0" step="1" placeholder="5" /></label>
+            <label>Open Installment Loans<input id="openInstallmentLoans" name="openInstallmentLoans" type="number" min="0" step="1" placeholder="1" /></label>
+            <label>Open Revolving Accounts<input id="openRevolvingAccounts" name="openRevolvingAccounts" type="number" min="0" step="1" placeholder="3" /></label>
+            <label>Collection Count<input id="collectionCount" name="collectionCount" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Charge Off Count<input id="chargeOffCount" name="chargeOffCount" type="number" min="0" step="1" placeholder="0" /></label>
+          </div>
+
+          <div id="mortgage-readiness-preview" class="readiness-preview" aria-live="polite"></div>
+
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Evaluation</button>
+            <button id="reset-mortgage-readiness-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div id="mortgage-readiness-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
       <section id="tasks" class="panel" aria-labelledby="tasks-heading">

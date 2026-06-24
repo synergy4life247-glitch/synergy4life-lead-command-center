@@ -5,6 +5,7 @@ const PIPELINE_KEY = 'synergy4life.pipeline';
 const PIPELINE_DELETED_KEY = 'synergy4life.pipeline.deletedSourceLeads';
 const CREDIT_FILES_KEY = 'synergy4life.creditFiles';
 const TASKS_KEY = 'synergy4life.tasks';
+const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -30,6 +31,13 @@ const creditFileFields = [
   'chargeOffs', 'repossessions', 'bankruptcy', 'disputeRoundNotes'
 ];
 const pipelineFields = ['pipelineName', 'pipelinePhone', 'pipelineEmail', 'pipelineSource', 'pipelineStage', 'pipelineValue', 'pipelineNotes'];
+const mortgageLoanTypes = ['FHA', 'VA', 'USDA', 'Conventional'];
+const mortgageReadinessFields = [
+  'mortgageClientName', 'mortgageScoreEq', 'mortgageScoreEx', 'mortgageScoreTu', 'desiredLoanType',
+  'targetPurchasePrice', 'estimatedIncome', 'currentMonthlyDebt', 'downPaymentAvailable',
+  'bankruptcyHistory', 'foreclosureHistory', 'latePayments24Months', 'utilizationPercentage',
+  'totalActiveTradelines', 'openInstallmentLoans', 'openRevolvingAccounts', 'collectionCount', 'chargeOffCount'
+];
 const taskFields = ['taskTitle', 'taskPerson', 'taskSource', 'taskType', 'taskDueDate', 'taskPriority', 'taskStatus', 'taskNotes'];
 const taskSourceOptions = ['Leads', 'Clients', 'Group Conversations', 'Pipeline Items', 'Credit Files'];
 const taskTypeOptions = ['Call', 'Text', 'Email', 'Follow-Up', 'Dispute Round', 'Credit File Review', 'Mortgage Check-In', 'Real Estate Follow-Up', 'Skool Follow-Up', 'Payment Follow-Up'];
@@ -62,6 +70,10 @@ const creditGoalFilter = document.querySelector('#credit-goal-filter');
 const creditStatusFilter = document.querySelector('#credit-status-filter');
 const creditStageFilter = document.querySelector('#credit-stage-filter');
 const creditMortgageFilter = document.querySelector('#credit-mortgage-filter');
+const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
+const mortgageReadinessList = document.querySelector('#mortgage-readiness-list');
+const mortgageReadinessCount = document.querySelector('#mortgage-readiness-count');
+const mortgageReadinessPreview = document.querySelector('#mortgage-readiness-preview');
 const taskForm = document.querySelector('#task-form');
 const taskList = document.querySelector('#task-list');
 const overdueTaskList = document.querySelector('#overdue-task-list');
@@ -76,6 +88,9 @@ const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(valu
 const formatDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString() : 'Not set';
 const formatCurrency = (value) => Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 const todayDateString = () => new Date().toISOString().slice(0, 10);
+const asNumber = (value) => Number(value || 0);
+const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+const formatPercent = (value) => `${Math.round(value)}%`;
 const isTaskOverdue = (task) => task.taskStatus !== 'Completed' && task.taskDueDate && task.taskDueDate < todayDateString();
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -88,6 +103,168 @@ function seedSelect(select, values, allLabel = '') {
     .join('');
 }
 
+
+
+function getMortgageReadinessFormData() {
+  return mortgageReadinessFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function calculateMortgageReadiness(input = {}) {
+  const scores = [input.mortgageScoreEq, input.mortgageScoreEx, input.mortgageScoreTu].map(asNumber).filter(Boolean);
+  const averageScore = Math.round(average(scores));
+  const income = asNumber(input.estimatedIncome);
+  const monthlyIncome = income / 12;
+  const monthlyDebt = asNumber(input.currentMonthlyDebt);
+  const dti = monthlyIncome ? (monthlyDebt / monthlyIncome) * 100 : 0;
+  const purchasePrice = asNumber(input.targetPurchasePrice);
+  const downPayment = asNumber(input.downPaymentAvailable);
+  const downPaymentPercent = purchasePrice ? (downPayment / purchasePrice) * 100 : 0;
+  const utilization = asNumber(input.utilizationPercentage);
+  const latePayments = asNumber(input.latePayments24Months);
+  const tradelines = asNumber(input.totalActiveTradelines);
+  const installments = asNumber(input.openInstallmentLoans);
+  const revolving = asNumber(input.openRevolvingAccounts);
+  const collections = asNumber(input.collectionCount);
+  const chargeOffs = asNumber(input.chargeOffCount);
+  const loanMinimums = { FHA: 580, VA: 620, USDA: 640, Conventional: 620 };
+  const minimumScore = loanMinimums[input.desiredLoanType] || 620;
+
+  let readinessScore = 30;
+  readinessScore += Math.min(30, Math.max(0, (averageScore - 520) / 10));
+  readinessScore += dti && dti <= 36 ? 15 : dti <= 43 ? 10 : dti <= 50 ? 4 : -8;
+  readinessScore += utilization <= 10 ? 12 : utilization <= 30 ? 7 : utilization <= 50 ? 2 : -8;
+  readinessScore += downPaymentPercent >= 5 ? 8 : downPaymentPercent >= 3.5 ? 5 : downPaymentPercent > 0 ? 2 : -5;
+  readinessScore += tradelines >= 3 ? 6 : tradelines >= 1 ? 2 : -6;
+  readinessScore += installments > 0 && revolving > 0 ? 4 : 0;
+  readinessScore -= latePayments * 5;
+  readinessScore -= collections * 4;
+  readinessScore -= chargeOffs * 4;
+  readinessScore -= input.bankruptcyHistory === 'Yes' ? 10 : 0;
+  readinessScore -= input.foreclosureHistory === 'Yes' ? 10 : 0;
+  readinessScore -= averageScore && averageScore < minimumScore ? 12 : 0;
+  readinessScore = Math.max(0, Math.min(100, Math.round(readinessScore)));
+
+  const approvalProbability = Math.max(5, Math.min(98, Math.round((readinessScore * 0.86) + (averageScore >= minimumScore ? 8 : -8))));
+  const approvalStatus = readinessScore >= 82 && averageScore >= minimumScore && dti <= 43 && latePayments === 0 ? 'Ready Now'
+    : readinessScore >= 68 ? '30-60 Days Away'
+    : readinessScore >= 52 ? '60-90 Days Away'
+    : '90+ Days Away';
+  const recommendations = [];
+  if (utilization > 10) recommendations.push('Reduce utilization below 10%');
+  if (latePayments > 0) recommendations.push('Remove recent late payments');
+  if (revolving < 2) recommendations.push('Add revolving account');
+  if (!installments || !revolving) recommendations.push('Improve credit mix');
+  if (dti > 43) recommendations.push('Reduce DTI');
+  if (purchasePrice && downPaymentPercent < 3.5) recommendations.push('Increase down payment');
+  if (tradelines < 3) recommendations.push('Add positive tradelines');
+  if (collections > 0) recommendations.push('Resolve or remove collection accounts');
+  if (chargeOffs > 0) recommendations.push('Address charge offs before application');
+  if (averageScore && averageScore < minimumScore) recommendations.push(`Raise middle score to at least ${minimumScore} for ${input.desiredLoanType || 'selected loan'} guidelines`);
+  if (!recommendations.length) recommendations.push('Maintain balances, payments, and documentation through application');
+
+  return { averageScore, dti, downPaymentPercent, readinessScore, approvalProbability, approvalStatus, recommendations };
+}
+
+function normalizeMortgageReadiness(record) {
+  return { ...record, calculated: calculateMortgageReadiness(record) };
+}
+
+function resetMortgageReadinessForm() {
+  mortgageReadinessForm.reset();
+  document.querySelector('#mortgage-readiness-id').value = '';
+  document.querySelector('#desiredLoanType').value = 'FHA';
+  document.querySelector('#bankruptcyHistory').value = 'No';
+  document.querySelector('#foreclosureHistory').value = 'No';
+  updateMortgageReadinessPreview();
+}
+
+function saveMortgageReadiness(event) {
+  event.preventDefault();
+  const evaluations = readStore(MORTGAGE_READINESS_KEY);
+  const id = document.querySelector('#mortgage-readiness-id').value || crypto.randomUUID();
+  const existing = evaluations.findIndex((item) => item.id === id);
+  const record = {
+    id,
+    ...getMortgageReadinessFormData(),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? evaluations[existing].createdAt : new Date().toISOString(),
+  };
+  if (existing >= 0) evaluations[existing] = record;
+  else evaluations.unshift(record);
+  writeStore(MORTGAGE_READINESS_KEY, evaluations);
+  resetMortgageReadinessForm();
+  updateMortgageReadinessPreview();
+  render();
+}
+
+function editMortgageReadiness(id) {
+  const evaluation = readStore(MORTGAGE_READINESS_KEY).find((item) => item.id === id);
+  if (!evaluation) return;
+  document.querySelector('#mortgage-readiness-id').value = evaluation.id;
+  mortgageReadinessFields.forEach((field) => {
+    document.querySelector(`#${field}`).value = evaluation[field] || '';
+  });
+  updateMortgageReadinessPreview();
+  document.querySelector('[data-tab="mortgage-ready"]').click();
+  mortgageReadinessForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteMortgageReadiness(id) {
+  writeStore(MORTGAGE_READINESS_KEY, readStore(MORTGAGE_READINESS_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function renderMortgageMetrics(evaluations) {
+  const calculated = evaluations.map(normalizeMortgageReadiness);
+  document.querySelector('#metric-mri-ready').textContent = calculated.filter((item) => item.calculated.approvalStatus === 'Ready Now').length;
+  document.querySelector('#metric-mri-improvement').textContent = calculated.filter((item) => item.calculated.approvalStatus !== 'Ready Now').length;
+  document.querySelector('#metric-mri-score').textContent = Math.round(average(calculated.map((item) => item.calculated.averageScore).filter(Boolean)));
+  document.querySelector('#metric-mri-dti').textContent = formatPercent(average(calculated.map((item) => item.calculated.dti).filter(Boolean)));
+}
+
+function renderMortgageReadinessCard(item) {
+  const evaluation = normalizeMortgageReadiness(item);
+  const calc = evaluation.calculated;
+  const card = document.createElement('article');
+  card.className = 'card mortgage-card';
+  card.innerHTML = `
+    <div class="card-topline">
+      <span class="badge ${calc.approvalStatus === 'Ready Now' ? 'success-badge' : ''}">${escapeHtml(calc.approvalStatus)}</span>
+      <span class="badge">${escapeHtml(evaluation.desiredLoanType || 'Loan')}</span>
+      <span class="badge">${calc.approvalProbability}% probability</span>
+    </div>
+    <h3>${escapeHtml(evaluation.mortgageClientName || 'Unnamed client')}</h3>
+    <p class="group">Target: ${formatCurrency(evaluation.targetPurchasePrice)} • Down payment: ${formatCurrency(evaluation.downPaymentAvailable)}</p>
+    <dl>
+      ${detail('Current Scores (EQ / EX / TU)', `${evaluation.mortgageScoreEq || '—'} / ${evaluation.mortgageScoreEx || '—'} / ${evaluation.mortgageScoreTu || '—'}`)}
+      ${detail('Average Client Score', calc.averageScore)}
+      ${detail('Debt-to-Income Ratio', formatPercent(calc.dti))}
+      ${detail('Mortgage Readiness Score', `${calc.readinessScore}/100`)}
+      ${detail('Approval Probability', `${calc.approvalProbability}%`)}
+      ${detail('Recommendations', calc.recommendations.join('\n'))}
+    </dl>
+    <div class="card-actions">
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.querySelector('.edit').addEventListener('click', () => editMortgageReadiness(evaluation.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteMortgageReadiness(evaluation.id));
+  return card;
+}
+
+function updateMortgageReadinessPreview() {
+  if (!mortgageReadinessPreview) return;
+  const calc = calculateMortgageReadiness(getMortgageReadinessFormData());
+  mortgageReadinessPreview.innerHTML = `
+    <article class="preview-card"><span>DTI</span><strong>${formatPercent(calc.dti)}</strong></article>
+    <article class="preview-card"><span>Readiness Score</span><strong>${calc.readinessScore}/100</strong></article>
+    <article class="preview-card"><span>Approval Probability</span><strong>${calc.approvalProbability}%</strong></article>
+    <article class="preview-card"><span>Status</span><strong>${escapeHtml(calc.approvalStatus)}</strong></article>
+    <article class="preview-card recommendations"><span>Recommendations</span><p>${escapeHtml(calc.recommendations.join(' • '))}</p></article>`;
+}
 
 function getTaskFormData() {
   return taskFields.reduce((data, field) => {
@@ -121,6 +298,7 @@ function resetTaskForm() {
 function saveTask(event) {
   event.preventDefault();
   const tasks = getTasks();
+  const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const id = document.querySelector('#task-id').value || crypto.randomUUID();
   const existing = tasks.findIndex((task) => task.id === id);
   const record = normalizeTask({
@@ -720,24 +898,31 @@ function render() {
   const pipelineLeads = getPipelineLeads();
   const creditFiles = readStore(CREDIT_FILES_KEY);
   const tasks = getTasks();
+  const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
   pipelineCount.textContent = `${pipelineLeads.length} lead${pipelineLeads.length === 1 ? '' : 's'}`;
   creditFileCount.textContent = `${creditFiles.length} file${creditFiles.length === 1 ? '' : 's'}`;
   taskCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
+  mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
   renderCreditFileMetrics(creditFiles);
   renderTaskMetrics(tasks);
+  renderMortgageMetrics(mortgageReadiness);
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
   creditFileList.innerHTML = '';
   taskList.innerHTML = '';
+  mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
+
+  if (!mortgageReadiness.length) mortgageReadinessList.innerHTML = '<p class="empty-message">No mortgage readiness evaluations yet. Add a client assessment above.</p>';
+  mortgageReadiness.forEach((item) => mortgageReadinessList.append(renderMortgageReadinessCard(item)));
 
   if (!conversations.length) conversationList.innerHTML = '<p class="empty-message">No group conversations yet. Add your first tracked reply above.</p>';
   conversations.forEach((conversation) => conversationList.append(renderConversationCard(conversation)));
@@ -776,6 +961,7 @@ seedSelect(pipelineStageFilter, pipelineStages, 'All stages');
 seedSelect(creditGoalFilter, creditGoalOptions, 'All goals');
 seedSelect(creditStatusFilter, creditStatusOptions, 'All statuses');
 seedSelect(creditStageFilter, disputeStageOptions, 'All stages');
+seedSelect(document.querySelector('#desiredLoanType'), mortgageLoanTypes);
 seedSelect(document.querySelector('#taskSource'), taskSourceOptions);
 seedSelect(document.querySelector('#taskType'), taskTypeOptions);
 seedSelect(document.querySelector('#taskPriority'), taskPriorityOptions);
@@ -788,12 +974,18 @@ form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
 pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
+mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
+document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
+mortgageReadinessFields.forEach((field) => document.querySelector(`#${field}`).addEventListener('input', updateMortgageReadinessPreview));
+document.querySelector('#desiredLoanType').addEventListener('change', updateMortgageReadinessPreview);
+document.querySelector('#bankruptcyHistory').addEventListener('change', updateMortgageReadinessPreview);
+document.querySelector('#foreclosureHistory').addEventListener('change', updateMortgageReadinessPreview);
 clientSearch.addEventListener('input', render);
 pipelineSearch.addEventListener('input', render);
 pipelineSourceFilter.addEventListener('input', render);
