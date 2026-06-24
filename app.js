@@ -190,7 +190,7 @@ const creditReportUpload = document.querySelector('#credit-report-upload');
 const creditReportUploadButton = document.querySelector('#credit-report-upload-button');
 const creditReportDropzone = document.querySelector('#credit-report-dropzone');
 const creditReportUploadStatus = document.querySelector('#credit-report-upload-status');
-const loadDemoReportButton = document.querySelector('#load-demo-report');
+const openManualReviewButton = document.querySelector('#open-manual-review');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const creditFileIntelligenceDashboard = document.querySelector('#credit-file-intelligence-dashboard');
 const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
@@ -1048,20 +1048,20 @@ function renderCommunicationCard(item) {
 }
 
 
-const parseUnavailableMessage = 'Report uploaded, but detailed parsing is not available yet. Manual review required.';
-
-const demoCreditFileIntelligence = {
-  id: 'demo-credit-file-intelligence', fileName: 'Demo tri-bureau credit report.txt', uploadedAt: new Date().toISOString(), isDemo: true, verified: true,
-  clientProfile: { name: 'Alicia Johnson', scores: { equifax: 628, experian: 641, transUnion: 636 }, goal: 'Mortgage approval in 90-120 days' },
-  negative: { collections: 3, chargeOffs: 1, repossessions: 0, latePayments: 4, bankruptcies: 'None reported', publicRecords: 0, studentLoans: 2 },
-  positive: { revolving: 4, installment: 2, mortgageHistory: 'No prior mortgage history', autoLoans: '1 open auto loan', authorizedUsers: 1, utilization: '47% aggregate utilization; two cards above 70%', creditMix: 'Solid mix, but revolving balances are suppressing score.' },
-  notes: 'Demo data only. Do not use for a real client.',
+const parseUnavailableMessage = 'Report uploaded successfully. Manual review required.';
+const uploadStatuses = {
+  none: 'No report uploaded',
+  processing: 'Processing report',
+  analyzed: 'Report analyzed',
+  manualReview: 'Manual review required',
 };
 
 function createUnparsedCreditFileReport(fileName, sourceLength = 0) {
+  const uploadedAt = new Date().toISOString();
   return {
-    id: crypto.randomUUID(), fileName, uploadedAt: new Date().toISOString(), sourceLength,
-    verified: false, needsManualReview: true, parseMessage: parseUnavailableMessage,
+    id: crypto.randomUUID(), fileName, uploadedAt, sourceLength,
+    uploadStatus: uploadStatuses.manualReview, metadata: { fileName, sourceLength, uploadedAt },
+    analysis: null, verified: false, needsManualReview: true, parseMessage: parseUnavailableMessage,
   };
 }
 
@@ -1069,11 +1069,95 @@ function getCreditFileIntelligence() {
   return readStore(CREDIT_FILE_INTELLIGENCE_KEY, null);
 }
 
+function setCreditUploadStatus(status) {
+  if (creditReportUploadStatus) creditReportUploadStatus.textContent = status;
+}
+
+function openManualReviewMode() {
+  if (!manualCreditAnalysisForm) return;
+  manualCreditAnalysisForm.classList.add('manual-review-active');
+  manualCreditAnalysisForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  manualCreditAnalysisForm.querySelector('input, textarea, select')?.focus({ preventScroll: true });
+}
+
+function extractFirstMatch(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return '';
+}
+
+function extractNumber(text, patterns) {
+  const value = extractFirstMatch(text, patterns);
+  return value === '' ? '' : asNumber(value.replace(/,/g, ''));
+}
+
+function parseCreditReportText(text, file) {
+  const source = String(text || '');
+  const normalized = source.replace(/\s+/g, ' ').trim();
+  if (normalized.length < 50) return null;
+  const getNum = (...patterns) => extractNumber(normalized, patterns);
+  const getText = (...patterns) => extractFirstMatch(normalized, patterns);
+  const uploadedAt = new Date().toISOString();
+  const report = {
+    id: crypto.randomUUID(),
+    fileName: file.name,
+    uploadedAt,
+    sourceLength: source.length,
+    uploadStatus: uploadStatuses.analyzed,
+    metadata: {
+      fileName: file.name,
+      fileType: file.type || 'unknown',
+      fileSize: file.size,
+      uploadedAt,
+      sourceLength: source.length,
+    },
+    analysis: 'parsed',
+    verified: true,
+    source: 'upload',
+    clientProfile: {
+      name: getText(/(?:client|consumer|borrower|name)\s*[:\-]\s*([A-Z][A-Za-z ,.'-]{2,60})/i) || 'Uploaded report',
+      scores: {
+        equifax: getNum(/(?:equifax|eq)[^\d]{0,20}(\d{3})/i),
+        experian: getNum(/(?:experian|ex)[^\d]{0,20}(\d{3})/i),
+        transUnion: getNum(/(?:transunion|trans union|tu)[^\d]{0,20}(\d{3})/i),
+      },
+      goal: 'Uploaded credit report analysis',
+    },
+    negative: {
+      collections: getNum(/collections?[^\d]{0,20}(\d+)/i),
+      chargeOffs: getNum(/charge[- ]?offs?[^\d]{0,20}(\d+)/i),
+      repossessions: getNum(/(?:repossession(?:s)?|repo(?:s)?)[^\d]{0,20}(\d+)/i),
+      latePayments: getNum(/late payments?[^\d]{0,20}(\d+)/i),
+      bankruptcies: getText(/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i) || '',
+      publicRecords: getNum(/public records?[^\d]{0,20}(\d+)/i),
+      studentLoans: getNum(/student loans?[^\d]{0,20}(\d+)/i),
+    },
+    positive: {
+      revolving: getNum(/(?:open )?revolving(?: accounts?)?[^\d]{0,20}(\d+)/i),
+      installment: getNum(/installment(?: accounts?)?[^\d]{0,20}(\d+)/i),
+      mortgageHistory: getText(/mortgage history\s*[:\-]\s*([^.;\n]{1,80})/i),
+      autoLoans: getText(/auto loans?\s*[:\-]\s*([^.;\n]{1,80})/i),
+      authorizedUsers: getNum(/authorized users?[^\d]{0,20}(\d+)/i),
+      utilization: getText(/utilization\s*[:\-]\s*([^.;\n]{1,80})/i) || (getNum(/(\d{1,3})\s*%\s*(?:utilization|util)/i) ? `${getNum(/(\d{1,3})\s*%\s*(?:utilization|util)/i)}%` : ''),
+      creditMix: 'Parsed from uploaded report text. Verify before client use.',
+    },
+    notes: 'Parsed automatically from uploaded report text. Confirm all values before acting.',
+  };
+  const hasScores = Object.values(report.clientProfile.scores).some((value) => value !== '');
+  const hasNegative = Object.values(report.negative).some((value) => value !== '');
+  const hasPositive = Object.values(report.positive).some((value) => value !== '');
+  return hasScores || hasNegative || hasPositive ? report : null;
+}
+
 function normalizeManualAnalysis(formData) {
   const get = (field) => (formData.get(field) || '').toString().trim();
   const num = (field) => get(field) === '' ? '' : asNumber(get(field));
+  const uploadedAt = new Date().toISOString();
   return {
-    id: crypto.randomUUID(), fileName: 'Manual Review', uploadedAt: new Date().toISOString(), sourceLength: 0,
+    id: crypto.randomUUID(), fileName: 'Manual Review', uploadedAt, sourceLength: 0,
+    uploadStatus: uploadStatuses.analyzed, analysis: 'manual', metadata: { fileName: 'Manual Review', uploadedAt, sourceLength: 0 },
     verified: true, source: 'manual',
     clientProfile: {
       name: get('manualClientName') || 'Manual analysis',
@@ -1130,12 +1214,15 @@ function strategyForCreditFile(report) {
 function renderCreditFileIntelligenceDashboard() {
   if (!creditFileIntelligenceDashboard) return;
   const report = getCreditFileIntelligence();
-  creditFileIntelligenceCount.textContent = report ? (report.isDemo ? 'Demo mode' : report.verified ? 'Manual analysis' : 'Manual review required') : 'No analysis';
+  creditFileIntelligenceCount.textContent = report ? (report.verified ? 'Report analyzed' : 'Manual review required') : 'No analysis';
+  if (report?.uploadStatus) setCreditUploadStatus(report.uploadStatus);
   if (!report) {
-    creditFileIntelligenceDashboard.innerHTML = '<article class="card"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span><p class="group">No verified credit file analysis has been saved yet.</p></article>';
+    setCreditUploadStatus(uploadStatuses.none);
+    creditFileIntelligenceDashboard.innerHTML = '<article class="card"><span class="badge warning-badge">No report analyzed yet.</span><h3>No report analyzed yet.</h3><dl><div><dt>Client</dt><dd>—</dd></div><div><dt>Scores</dt><dd>—</dd></div><div><dt>Analysis</dt><dd>—</dd></div></dl></article>';
     return;
   }
   if (!report.verified) {
+    setCreditUploadStatus(report.parseMessage || parseUnavailableMessage);
     creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>`;
     return;
   }
@@ -1146,7 +1233,7 @@ function renderCreditFileIntelligenceDashboard() {
   const updateMessage = `Hi ${profile.name}, your verified credit file review is complete. Current scores are EQ ${profile.scores.equifax || 'not entered'}, EX ${profile.scores.experian || 'not entered'}, and TU ${profile.scores.transUnion || 'not entered'}. The main priorities are ${disputes[0]} Next we will focus on ${rebuild[0]} Mortgage readiness is ${scoreText}.`;
   const list = (items) => `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
   creditFileIntelligenceDashboard.innerHTML = `
-    <section class="intel-hero card"><div><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span>${report.isDemo ? '<span class="badge">Demo data</span>' : '<span class="badge success-badge">Verified data</span>'}</div><p class="eyebrow">Client profile</p><h3>${escapeHtml(profile.name)}</h3><p>${escapeHtml(profile.goal)}</p></div><div class="score-stack"><span>EQ ${escapeHtml(profile.scores.equifax || '—')}</span><span>EX ${escapeHtml(profile.scores.experian || '—')}</span><span>TU ${escapeHtml(profile.scores.transUnion || '—')}</span></div></section>
+    <section class="intel-hero card"><div><div class="card-topline"><span class="badge warning-badge">AI parsing is experimental. Verify before client use.</span><span class="badge success-badge">Verified data</span></div><p class="eyebrow">Client profile</p><h3>${escapeHtml(profile.name || '—')}</h3><p>${escapeHtml(profile.goal || '—')}</p></div><div class="score-stack"><span>EQ ${escapeHtml(profile.scores.equifax || '—')}</span><span>EX ${escapeHtml(profile.scores.experian || '—')}</span><span>TU ${escapeHtml(profile.scores.transUnion || '—')}</span></div></section>
     <div class="metrics-grid"><article class="metric-card"><span>Mortgage Readiness Score</span><strong>${escapeHtml(scoreText)}</strong></article><article class="metric-card"><span>Negative Categories</span><strong>${Object.values(n).filter(Boolean).length}</strong></article><article class="metric-card"><span>Positive Tradelines</span><strong>${asNumber(p.revolving)+asNumber(p.installment)+asNumber(p.authorizedUsers)}</strong></article></div>
     <div class="intelligence-grid">
       <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Bankruptcy', n.bankruptcies)}${detail('Student loans', n.studentLoans)}</dl></article>
@@ -1161,16 +1248,28 @@ function renderCreditFileIntelligenceDashboard() {
 function handleCreditReportFile(file) {
   if (!file) return;
   const valid = ['application/pdf', 'text/plain'].includes(file.type) || /\.(pdf|txt)$/i.test(file.name);
-  if (!valid) { creditReportUploadStatus.textContent = 'Please upload a PDF or TXT credit report.'; return; }
+  if (!valid) { setCreditUploadStatus('Please upload a PDF or TXT credit report.'); return; }
+  localStorage.removeItem(CREDIT_FILE_INTELLIGENCE_KEY);
+  setCreditUploadStatus('Processing report...');
+  renderCreditFileIntelligenceDashboard();
+  setCreditUploadStatus('Processing report...');
   const reader = new FileReader();
   reader.onload = () => {
-    const text = file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? '' : String(reader.result || '');
-    const report = createUnparsedCreditFileReport(file.name, text.length);
+    const text = String(reader.result || '');
+    const parsed = parseCreditReportText(text, file);
+    const report = parsed || createUnparsedCreditFileReport(file.name, text.length);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-    creditReportUploadStatus.textContent = parseUnavailableMessage;
+    setCreditUploadStatus(parsed ? uploadStatuses.analyzed : parseUnavailableMessage);
     renderCreditFileIntelligenceDashboard();
+    if (!parsed) openManualReviewMode();
   };
-  creditReportUploadStatus.textContent = `Uploading ${file.name}...`;
+  reader.onerror = () => {
+    const report = createUnparsedCreditFileReport(file.name, 0);
+    writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
+    setCreditUploadStatus(parseUnavailableMessage);
+    renderCreditFileIntelligenceDashboard();
+    openManualReviewMode();
+  };
   reader.readAsText(file);
 }
 
@@ -1178,13 +1277,7 @@ function saveManualCreditAnalysis(event) {
   event.preventDefault();
   const report = normalizeManualAnalysis(new FormData(manualCreditAnalysisForm));
   writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-  creditReportUploadStatus.textContent = 'Manual analysis saved. Strategies now use verified manual data.';
-  renderCreditFileIntelligenceDashboard();
-}
-
-function loadDemoCreditFileReport() {
-  writeStore(CREDIT_FILE_INTELLIGENCE_KEY, { ...demoCreditFileIntelligence, id: crypto.randomUUID(), uploadedAt: new Date().toISOString() });
-  creditReportUploadStatus.textContent = 'Demo report loaded. Demo values are not client data.';
+  setCreditUploadStatus(uploadStatuses.analyzed);
   renderCreditFileIntelligenceDashboard();
 }
 
@@ -2867,7 +2960,7 @@ pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.click());
-loadDemoReportButton?.addEventListener('click', loadDemoCreditFileReport);
+openManualReviewButton?.addEventListener('click', openManualReviewMode);
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 creditReportUpload?.addEventListener('change', (event) => handleCreditReportFile(event.target.files[0]));
 creditReportDropzone?.addEventListener('dragover', (event) => { event.preventDefault(); creditReportDropzone.classList.add('drag-over'); });
