@@ -19,6 +19,7 @@
       <button class="tab" type="button" data-tab="leads">Leads</button>
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
+      <button class="tab" type="button" data-tab="onboarding">Onboarding</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
       <button class="tab" type="button" data-tab="documents">Documents</button>
       <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
@@ -195,6 +196,69 @@
         </div>
 
         <div id="client-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="onboarding" class="panel" aria-labelledby="onboarding-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Client onboarding</p>
+            <h2 id="onboarding-heading">Onboarding Center</h2>
+          </div>
+          <span id="onboarding-count" class="count-pill">0 records</span>
+        </div>
+
+        <div class="metrics-grid onboarding-metrics" aria-label="Onboarding dashboard metrics">
+          <article class="metric-card"><span>New Enrollments</span><strong id="metric-onboarding-new">0</strong></article>
+          <article class="metric-card"><span>Waiting Documents</span><strong id="metric-onboarding-waiting">0</strong></article>
+          <article class="metric-card"><span>Ready For Analysis</span><strong id="metric-onboarding-analysis">0</strong></article>
+          <article class="metric-card"><span>Active Clients</span><strong id="metric-onboarding-active">0</strong></article>
+          <article class="metric-card"><span>Completed This Month</span><strong id="metric-onboarding-completed-month">0</strong></article>
+        </div>
+
+        <form id="onboarding-form" class="tracker-form onboarding-form">
+          <input type="hidden" id="onboarding-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="onboardingClientName" name="onboardingClientName" placeholder="Jane Smith" required /></label>
+            <label>Email<input id="onboardingEmail" name="onboardingEmail" type="email" placeholder="jane@email.com" /></label>
+            <label>Phone<input id="onboardingPhone" name="onboardingPhone" type="tel" placeholder="(555) 123-4567" /></label>
+            <label>Service Purchased<select id="onboardingService" name="onboardingService"></select></label>
+            <label>Status<select id="onboardingStatus" name="onboardingStatus"></select></label>
+            <label>Enrollment Date<input id="onboardingEnrollmentDate" name="onboardingEnrollmentDate" type="date" /></label>
+            <label>Assigned Team Member<input id="onboardingAssignedTeamMember" name="onboardingAssignedTeamMember" placeholder="Team member" /></label>
+          </div>
+          <fieldset class="checklist-fieldset">
+            <legend>Onboarding Checklist</legend>
+            <div class="checklist-grid">
+              <label><input id="agreementSigned" name="agreementSigned" type="checkbox" /> Agreement Signed</label>
+              <label><input id="invoicePaid" name="invoicePaid" type="checkbox" /> Invoice Paid</label>
+              <label><input id="identityIqReceived" name="identityIqReceived" type="checkbox" /> IdentityIQ Received</label>
+              <label><input id="creditReportReceived" name="creditReportReceived" type="checkbox" /> Credit Report Received</label>
+              <label><input id="driverLicenseReceived" name="driverLicenseReceived" type="checkbox" /> Driver License Received</label>
+              <label><input id="proofOfAddressReceived" name="proofOfAddressReceived" type="checkbox" /> Proof of Address Received</label>
+              <label><input id="portalSetupCompleted" name="portalSetupCompleted" type="checkbox" /> Portal Setup Completed</label>
+              <label><input id="welcomeEmailSent" name="welcomeEmailSent" type="checkbox" /> Welcome Email Sent</label>
+              <label><input id="initialAnalysisCompleted" name="initialAnalysisCompleted" type="checkbox" /> Initial Analysis Completed</label>
+              <label><input id="round1Started" name="round1Started" type="checkbox" /> Round 1 Started</label>
+            </div>
+          </fieldset>
+          <label>Notes<textarea id="onboardingNotes" name="onboardingNotes" placeholder="Missing documents, welcome call notes, blockers, next steps"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Onboarding Record</button>
+            <button id="reset-onboarding-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel onboarding-controls">
+          <label>Search Onboarding Records<input id="onboarding-search" placeholder="Search name, email, phone, service, team, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Status<select id="onboarding-status-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Service<select id="onboarding-service-filter"><option value="">All services</option></select></label>
+            <label>Filter by Team Member<select id="onboarding-team-filter"><option value="">All team members</option></select></label>
+          </div>
+        </div>
+
+        <div id="onboarding-list" class="card-grid empty-state"></div>
       </section>
 
 
