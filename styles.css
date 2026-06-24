@@ -73,3 +73,49 @@ dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 @media (min-width: 1000px) {
   .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+.metric-card {
+  display: grid;
+  gap: .35rem;
+  min-height: 96px;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #ffffff, #edf4ff);
+  box-shadow: var(--shadow);
+}
+.metric-card span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.metric-card strong {
+  align-self: end;
+  color: var(--brand-dark);
+  font-size: clamp(1.25rem, 8vw, 2rem);
+  line-height: 1;
+}
+.filter-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: #f8fbff;
+  box-shadow: var(--shadow);
+}
+.compact-grid { gap: .75rem; }
+.client-card h3 { font-size: 1.3rem; }
+
+@media (min-width: 720px) {
+  .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
