@@ -16,6 +16,7 @@
 
     <nav class="tabs" aria-label="Primary navigation">
       <button class="tab active" type="button" data-tab="leads">Leads</button>
+      <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
@@ -30,6 +31,52 @@
           <span id="lead-count" class="count-pill">0 leads</span>
         </div>
         <div id="lead-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="pipeline" class="panel" aria-labelledby="pipeline-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Pipeline management</p>
+            <h2 id="pipeline-heading">Lead Pipeline</h2>
+          </div>
+          <span id="pipeline-count" class="count-pill">0 leads</span>
+        </div>
+
+        <div class="metrics-grid pipeline-metrics" aria-label="Pipeline metrics">
+          <article class="metric-card"><span>Total Pipeline Leads</span><strong id="metric-pipeline-leads">0</strong></article>
+          <article class="metric-card"><span>Enrolled Client Value</span><strong id="metric-enrolled-value">$0</strong></article>
+          <article class="metric-card"><span>Active Clients</span><strong id="metric-pipeline-active">0</strong></article>
+        </div>
+
+        <form id="pipeline-form" class="tracker-form">
+          <input type="hidden" id="pipeline-id" />
+          <div class="form-grid">
+            <label>Lead Name<input id="pipelineName" name="pipelineName" placeholder="Jane Smith" required /></label>
+            <label>Phone<input id="pipelinePhone" name="pipelinePhone" type="tel" placeholder="(555) 123-4567" /></label>
+            <label>Email<input id="pipelineEmail" name="pipelineEmail" type="email" placeholder="jane@email.com" /></label>
+            <label>Source<input id="pipelineSource" name="pipelineSource" placeholder="Facebook group, referral, website" /></label>
+            <label>Stage
+              <select id="pipelineStage" name="pipelineStage"></select>
+            </label>
+            <label>Enrolled Value<input id="pipelineValue" name="pipelineValue" type="number" min="0" step="0.01" placeholder="499" /></label>
+          </div>
+          <label>Notes<textarea id="pipelineNotes" name="pipelineNotes" placeholder="Objections, promises, next steps, buying signals"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Pipeline Lead</button>
+            <button id="reset-pipeline-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel pipeline-controls">
+          <label>Search Pipeline<input id="pipeline-search" placeholder="Search name, phone, email, source, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Stage<select id="pipeline-stage-filter"><option value="">All stages</option></select></label>
+            <label>Filter by Source<input id="pipeline-source-filter" placeholder="Any source" /></label>
+          </div>
+        </div>
+
+        <div id="pipeline-board" class="pipeline-board" aria-live="polite"></div>
       </section>
 
       <section id="clients" class="panel" aria-labelledby="clients-heading">

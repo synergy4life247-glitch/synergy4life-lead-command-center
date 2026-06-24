@@ -1,6 +1,8 @@
 const CONVERSATIONS_KEY = 'synergy4life.groupConversations';
 const LEADS_KEY = 'synergy4life.leads';
 const CLIENTS_KEY = 'synergy4life.clients';
+const PIPELINE_KEY = 'synergy4life.pipeline';
+const PIPELINE_DELETED_KEY = 'synergy4life.pipeline.deletedSourceLeads';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -15,6 +17,8 @@ const clientFields = [
 ];
 const clientGoalOptions = ['Home', 'Auto', 'Business Funding', 'Personal Credit'];
 const paymentStatusOptions = ['Current', 'Past Due', 'Paid in Full', 'Paused'];
+const pipelineStages = ['New Lead', 'Contacted', 'Credit Analysis Sent', 'Follow Up', 'Enrolled', 'Active Client', 'Lost Lead'];
+const pipelineFields = ['pipelineName', 'pipelinePhone', 'pipelineEmail', 'pipelineSource', 'pipelineStage', 'pipelineValue', 'pipelineNotes'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -28,6 +32,12 @@ const clientSearch = document.querySelector('#client-search');
 const goalFilter = document.querySelector('#goal-filter');
 const paymentFilter = document.querySelector('#payment-filter');
 const teamFilter = document.querySelector('#team-filter');
+const pipelineForm = document.querySelector('#pipeline-form');
+const pipelineBoard = document.querySelector('#pipeline-board');
+const pipelineCount = document.querySelector('#pipeline-count');
+const pipelineSearch = document.querySelector('#pipeline-search');
+const pipelineStageFilter = document.querySelector('#pipeline-stage-filter');
+const pipelineSourceFilter = document.querySelector('#pipeline-source-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -37,6 +47,168 @@ const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => (
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 })[char]);
 
+
+function seedSelect(select, values, allLabel = '') {
+  select.innerHTML = (allLabel ? `<option value="">${allLabel}</option>` : '') + values
+    .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+    .join('');
+}
+
+function getPipelineFormData() {
+  return pipelineFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function normalizePipelineLead(lead) {
+  return {
+    id: lead.id || crypto.randomUUID(),
+    pipelineName: lead.pipelineName || lead.name || 'Unnamed lead',
+    pipelinePhone: lead.pipelinePhone || lead.phone || '',
+    pipelineEmail: lead.pipelineEmail || lead.email || '',
+    pipelineSource: lead.pipelineSource || lead.source || 'Converted lead',
+    pipelineStage: pipelineStages.includes(lead.pipelineStage) ? lead.pipelineStage : 'New Lead',
+    pipelineValue: lead.pipelineValue || lead.value || '',
+    pipelineNotes: lead.pipelineNotes || lead.notes || lead.painPoint || '',
+    createdAt: lead.createdAt || new Date().toISOString(),
+    updatedAt: lead.updatedAt || new Date().toISOString(),
+    sourceLeadId: lead.sourceLeadId,
+  };
+}
+
+function getPipelineLeads() {
+  const pipeline = readStore(PIPELINE_KEY).map(normalizePipelineLead);
+  const convertedLeads = readStore(LEADS_KEY);
+  const deletedSourceLeads = readStore(PIPELINE_DELETED_KEY);
+  let changed = false;
+  convertedLeads.forEach((lead) => {
+    if (!deletedSourceLeads.includes(lead.id) && !pipeline.some((item) => item.sourceLeadId === lead.id)) {
+      pipeline.unshift({ ...normalizePipelineLead(lead), id: crypto.randomUUID(), sourceLeadId: lead.id });
+      changed = true;
+    }
+  });
+  if (changed) writeStore(PIPELINE_KEY, pipeline);
+  return pipeline;
+}
+
+function resetPipelineForm() {
+  pipelineForm.reset();
+  document.querySelector('#pipeline-id').value = '';
+  document.querySelector('#pipelineStage').value = 'New Lead';
+}
+
+function savePipelineLead(event) {
+  event.preventDefault();
+  const pipeline = getPipelineLeads();
+  const id = document.querySelector('#pipeline-id').value || crypto.randomUUID();
+  const existing = pipeline.findIndex((lead) => lead.id === id);
+  const record = {
+    id,
+    ...getPipelineFormData(),
+    updatedAt: new Date().toISOString(),
+    createdAt: existing >= 0 ? pipeline[existing].createdAt : new Date().toISOString(),
+  };
+  if (existing >= 0) pipeline[existing] = record;
+  else pipeline.unshift(record);
+  writeStore(PIPELINE_KEY, pipeline);
+  resetPipelineForm();
+  render();
+}
+
+function editPipelineLead(id) {
+  const lead = getPipelineLeads().find((item) => item.id === id);
+  if (!lead) return;
+  document.querySelector('#pipeline-id').value = lead.id;
+  pipelineFields.forEach((field) => {
+    document.querySelector(`#${field}`).value = lead[field] || '';
+  });
+  document.querySelector('[data-tab="pipeline"]').click();
+  pipelineForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deletePipelineLead(id) {
+  const lead = getPipelineLeads().find((item) => item.id === id);
+  if (lead?.sourceLeadId) {
+    writeStore(PIPELINE_DELETED_KEY, [...new Set([...readStore(PIPELINE_DELETED_KEY), lead.sourceLeadId])]);
+  }
+  writeStore(PIPELINE_KEY, getPipelineLeads().filter((item) => item.id !== id));
+  render();
+}
+
+function movePipelineLead(id, stage) {
+  const pipeline = getPipelineLeads().map((lead) => lead.id === id ? { ...lead, pipelineStage: stage, updatedAt: new Date().toISOString() } : lead);
+  writeStore(PIPELINE_KEY, pipeline);
+  render();
+}
+
+function getFilteredPipelineLeads(leads) {
+  const query = pipelineSearch.value.trim().toLowerCase();
+  const source = pipelineSourceFilter.value.trim().toLowerCase();
+  return leads.filter((lead) => {
+    const searchable = [lead.pipelineName, lead.pipelinePhone, lead.pipelineEmail, lead.pipelineSource, lead.pipelineNotes].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!pipelineStageFilter.value || lead.pipelineStage === pipelineStageFilter.value)
+      && (!source || (lead.pipelineSource || '').toLowerCase().includes(source));
+  });
+}
+
+function renderPipelineMetrics(leads) {
+  document.querySelector('#metric-pipeline-leads').textContent = leads.length;
+  document.querySelector('#metric-enrolled-value').textContent = formatCurrency(leads
+    .filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage))
+    .reduce((sum, lead) => sum + Number(lead.pipelineValue || 0), 0));
+  document.querySelector('#metric-pipeline-active').textContent = leads.filter((lead) => lead.pipelineStage === 'Active Client').length;
+}
+
+function renderPipelineCard(lead) {
+  const card = document.createElement('article');
+  card.className = 'card pipeline-card';
+  card.draggable = true;
+  card.dataset.id = lead.id;
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(lead.pipelineStage)}</span><span class="badge">${formatCurrency(lead.pipelineValue)}</span></div>
+    <h3>${escapeHtml(lead.pipelineName || 'Unnamed lead')}</h3>
+    <p class="group">${escapeHtml(lead.pipelinePhone || 'No phone')} • ${escapeHtml(lead.pipelineEmail || 'No email')}<br>${escapeHtml(lead.pipelineSource || 'No source')}</p>
+    <dl>${detail('Notes', lead.pipelineNotes)}</dl>
+    <label class="stage-move-label">Move to stage<select class="stage-move">${pipelineStages.map((stage) => `<option value="${escapeHtml(stage)}" ${stage === lead.pipelineStage ? 'selected' : ''}>${escapeHtml(stage)}</option>`).join('')}</select></label>
+    <div class="card-actions">
+      <button class="edit secondary" type="button">Edit</button>
+      <button class="delete danger" type="button">Delete</button>
+    </div>`;
+  card.addEventListener('dragstart', (event) => {
+    event.dataTransfer.setData('text/plain', lead.id);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  card.querySelector('.stage-move').addEventListener('change', (event) => movePipelineLead(lead.id, event.target.value));
+  card.querySelector('.edit').addEventListener('click', () => editPipelineLead(lead.id));
+  card.querySelector('.delete').addEventListener('click', () => deletePipelineLead(lead.id));
+  return card;
+}
+
+function renderPipelineBoard(leads) {
+  pipelineBoard.innerHTML = '';
+  const filtered = getFilteredPipelineLeads(leads);
+  pipelineStages.forEach((stage) => {
+    const stageLeads = filtered.filter((lead) => lead.pipelineStage === stage);
+    const column = document.createElement('section');
+    column.className = 'pipeline-column';
+    column.dataset.stage = stage;
+    column.innerHTML = `<div class="pipeline-column-header"><h3>${escapeHtml(stage)}</h3><span class="count-pill">${stageLeads.length}</span></div>`;
+    column.addEventListener('dragover', (event) => { event.preventDefault(); column.classList.add('drag-over'); });
+    column.addEventListener('dragleave', () => column.classList.remove('drag-over'));
+    column.addEventListener('drop', (event) => {
+      event.preventDefault();
+      column.classList.remove('drag-over');
+      const id = event.dataTransfer.getData('text/plain');
+      if (id) movePipelineLead(id, stage);
+    });
+    if (!stageLeads.length) column.insertAdjacentHTML('beforeend', '<p class="pipeline-empty">Drop leads here</p>');
+    stageLeads.forEach((lead) => column.append(renderPipelineCard(lead)));
+    pipelineBoard.append(column);
+  });
+}
 
 function getClientFormData() {
   return clientFields.reduce((data, field) => {
@@ -221,6 +393,8 @@ function convertToLead(id) {
       temperature: conversation.leadTemperature,
       followUpDate: conversation.followUpDate,
       status: 'New lead',
+      phone: '',
+      email: '',
       notes: conversation.notes,
       createdAt: new Date().toISOString(),
     });
@@ -280,14 +454,18 @@ function render() {
   const conversations = readStore(CONVERSATIONS_KEY);
   const leads = readStore(LEADS_KEY);
   const clients = readStore(CLIENTS_KEY);
+  const pipelineLeads = getPipelineLeads();
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
+  pipelineCount.textContent = `${pipelineLeads.length} lead${pipelineLeads.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
+  renderPipelineMetrics(pipelineLeads);
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
+  renderPipelineBoard(pipelineLeads);
 
   if (!conversations.length) conversationList.innerHTML = '<p class="empty-message">No group conversations yet. Add your first tracked reply above.</p>';
   conversations.forEach((conversation) => conversationList.append(renderConversationCard(conversation)));
@@ -308,10 +486,18 @@ document.querySelectorAll('.tab').forEach((tab) => {
   });
 });
 
+seedSelect(document.querySelector('#pipelineStage'), pipelineStages);
+seedSelect(pipelineStageFilter, pipelineStages, 'All stages');
+
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
+pipelineForm.addEventListener('submit', savePipelineLead);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
+document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 clientSearch.addEventListener('input', render);
+pipelineSearch.addEventListener('input', render);
+pipelineSourceFilter.addEventListener('input', render);
+pipelineStageFilter.addEventListener('change', render);
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
 render();
