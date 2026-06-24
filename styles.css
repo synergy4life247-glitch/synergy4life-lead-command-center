@@ -1010,3 +1010,44 @@ button:disabled {
 .table-scroll table { width: 100%; border-collapse: collapse; min-width: 860px; }
 .table-scroll th, .table-scroll td { border-bottom: 1px solid var(--line); padding: .65rem; text-align: left; vertical-align: top; }
 .table-scroll th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+
+.parser-training-lab {
+  border-color: #bfdbfe;
+  background: linear-gradient(145deg, #ffffff, #eff6ff);
+}
+.correction-form { display: grid; gap: 1rem; }
+.report-master-grid {
+  display: grid;
+  gap: 1rem;
+}
+.report-master-grid pre,
+.intelligence-grid pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--line);
+  border-radius: .85rem;
+  padding: .85rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.checklist {
+  display: grid;
+  gap: .45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checklist li {
+  border-radius: .75rem;
+  padding: .65rem .75rem;
+  font-weight: 900;
+}
+.checklist .pass { background: #dcfce7; color: #166534; }
+.checklist .fail { background: #fef3c7; color: #92400e; }
+@media (min-width: 860px) {
+  .report-master-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
