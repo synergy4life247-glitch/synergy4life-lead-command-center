@@ -203,14 +203,10 @@ const creditIntelligencePreview = document.querySelector('#credit-intelligence-p
 const creditFileIntelligenceCount = document.querySelector('#credit-file-intelligence-count');
 const creditReportUpload = document.querySelector('#credit-report-upload');
 const creditReportUploadButton = document.querySelector('#credit-report-upload-button');
-const creditReportUploadNewButton = document.querySelector('#credit-report-upload-new-button');
 const creditReportDropzone = document.querySelector('#credit-report-dropzone');
 const creditReportUploadStatus = document.querySelector('#credit-report-upload-status');
 const openManualReviewButton = document.querySelector('#open-manual-review');
 const clearCurrentReportButton = document.querySelector('#clear-current-report');
-const clearCurrentReportStickyButton = document.querySelector('#clear-current-report-sticky');
-const openManualReviewStickyButton = document.querySelector('#open-manual-review-sticky');
-const viewParserDebugStickyButton = document.querySelector('#view-parser-debug-sticky');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const parserCorrectionForm = document.querySelector('#parser-correction-form');
 const approveFinalAnalysisButton = document.querySelector('#approve-final-analysis');
@@ -1301,7 +1297,17 @@ async function analyzeCreditReportFile(file) {
 }
 
 function setCreditUploadStatus(status) {
-  if (creditReportUploadStatus) creditReportUploadStatus.textContent = status;
+  if (!creditReportUploadStatus) return;
+  creditReportUploadStatus.textContent = status;
+  creditReportUploadStatus.classList.remove('status-success', 'status-warning', 'status-neutral');
+  const normalizedStatus = String(status || '').toLowerCase();
+  if (normalizedStatus === uploadStatuses.analyzed.toLowerCase()) {
+    creditReportUploadStatus.classList.add('status-success');
+  } else if (normalizedStatus.includes('manual review') || normalizedStatus.includes('approval') || normalizedStatus.includes('correction') || normalizedStatus.includes('confidence')) {
+    creditReportUploadStatus.classList.add('status-warning');
+  } else {
+    creditReportUploadStatus.classList.add('status-neutral');
+  }
 }
 
 function openManualReviewMode() {
@@ -3671,15 +3677,8 @@ pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.click());
-creditReportUploadNewButton?.addEventListener('click', () => creditReportUpload?.click());
 openManualReviewButton?.addEventListener('click', openManualReviewMode);
 clearCurrentReportButton?.addEventListener('click', clearCurrentCreditReport);
-clearCurrentReportStickyButton?.addEventListener('click', clearCurrentCreditReport);
-openManualReviewStickyButton?.addEventListener('click', openManualReviewMode);
-viewParserDebugStickyButton?.addEventListener('click', () => {
-  const target = document.querySelector('.parser-failed-fields.has-failures') || document.querySelector('.parser-debug-card') || creditFileIntelligenceDashboard;
-  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 parserCorrectionForm?.addEventListener('submit', storeParserCorrection);
 approveFinalAnalysisButton?.addEventListener('click', approveFinalAnalysis);
