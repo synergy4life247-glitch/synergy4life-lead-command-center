@@ -18,6 +18,7 @@
       <button class="tab active" type="button" data-tab="leads">Leads</button>
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
+      <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -153,6 +154,96 @@
         </div>
 
         <div id="client-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="credit-files" class="panel" aria-labelledby="credit-files-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Credit repair operations</p>
+            <h2 id="credit-files-heading">Credit Files</h2>
+          </div>
+          <span id="credit-file-count" class="count-pill">0 files</span>
+        </div>
+
+        <div class="metrics-grid credit-metrics" aria-label="Credit file dashboard metrics">
+          <article class="metric-card"><span>Active Credit Files</span><strong id="metric-credit-active">0</strong></article>
+          <article class="metric-card"><span>Mortgage Ready</span><strong id="metric-credit-mortgage-ready">0</strong></article>
+          <article class="metric-card"><span>Follow-Ups Due</span><strong id="metric-credit-follow-ups">0</strong></article>
+        </div>
+
+        <form id="credit-file-form" class="tracker-form">
+          <input type="hidden" id="credit-file-id" />
+          <div class="form-grid">
+            <label>Client Name<input id="creditClientName" name="creditClientName" placeholder="Jane Smith" required /></label>
+            <label>Email<input id="creditEmail" name="creditEmail" type="email" placeholder="jane@email.com" /></label>
+            <label>Phone<input id="creditPhone" name="creditPhone" type="tel" placeholder="(555) 123-4567" /></label>
+            <label>Goal
+              <select id="creditGoal" name="creditGoal">
+                <option value="Mortgage">Mortgage</option>
+                <option value="Auto">Auto</option>
+                <option value="Personal">Personal</option>
+                <option value="Business">Business</option>
+              </select>
+            </label>
+            <label>Equifax Score<input id="scoreEq" name="scoreEq" type="number" min="300" max="850" placeholder="620" /></label>
+            <label>Experian Score<input id="scoreEx" name="scoreEx" type="number" min="300" max="850" placeholder="640" /></label>
+            <label>TransUnion Score<input id="scoreTu" name="scoreTu" type="number" min="300" max="850" placeholder="635" /></label>
+            <label>Target Score<input id="creditTargetScore" name="creditTargetScore" type="number" min="300" max="850" placeholder="720" /></label>
+            <label>Enrollment Date<input id="creditEnrollmentDate" name="creditEnrollmentDate" type="date" /></label>
+            <label>Status
+              <select id="creditStatus" name="creditStatus">
+                <option value="Active">Active</option>
+                <option value="Awaiting Documents">Awaiting Documents</option>
+                <option value="In Dispute">In Dispute</option>
+                <option value="Escalated">Escalated</option>
+                <option value="Complete">Complete</option>
+                <option value="Paused">Paused</option>
+              </select>
+            </label>
+            <label>Dispute Stage
+              <select id="disputeStage" name="disputeStage">
+                <option value="Round 1">Round 1</option>
+                <option value="Round 2">Round 2</option>
+                <option value="Round 3">Round 3</option>
+                <option value="CFPB">CFPB</option>
+                <option value="Attorney Escalation">Attorney Escalation</option>
+              </select>
+            </label>
+            <label>Follow-Up Date<input id="creditFollowUpDate" name="creditFollowUpDate" type="date" /></label>
+            <label>Mortgage Ready
+              <select id="creditMortgageReady" name="creditMortgageReady"><option value="No">No</option><option value="Yes">Yes</option></select>
+            </label>
+          </div>
+
+          <div class="credit-section-grid">
+            <label>Negative Accounts<textarea id="negativeAccounts" name="negativeAccounts" placeholder="Creditor, bureau, balance, action needed"></textarea></label>
+            <label>Inquiries<textarea id="inquiries" name="inquiries" placeholder="Creditor, bureau, date"></textarea></label>
+            <label>Late Payments<textarea id="latePayments" name="latePayments" placeholder="Account, dates, bureaus reporting"></textarea></label>
+            <label>Collections<textarea id="collections" name="collections" placeholder="Collector, original creditor, balance"></textarea></label>
+            <label>Charge Offs<textarea id="chargeOffs" name="chargeOffs" placeholder="Creditor, date, balance, bureaus"></textarea></label>
+            <label>Repossessions<textarea id="repossessions" name="repossessions" placeholder="Lender, date, status"></textarea></label>
+            <label>Bankruptcy<textarea id="bankruptcy" name="bankruptcy" placeholder="Chapter, filed/discharged dates, notes"></textarea></label>
+          </div>
+
+          <label>Dispute Round Notes<textarea id="disputeRoundNotes" name="disputeRoundNotes" placeholder="Round notes, outcomes, letters sent, proof requested, escalation plan"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Credit File</button>
+            <button id="reset-credit-file-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel">
+          <label>Search Credit Files<input id="credit-file-search" placeholder="Search client, email, phone, accounts, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Goal<select id="credit-goal-filter"><option value="">All goals</option></select></label>
+            <label>Filter by Status<select id="credit-status-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Stage<select id="credit-stage-filter"><option value="">All stages</option></select></label>
+            <label>Mortgage Ready<select id="credit-mortgage-filter"><option value="">All files</option><option value="Yes">Mortgage ready</option><option value="No">Not ready</option></select></label>
+          </div>
+        </div>
+
+        <div id="credit-file-list" class="card-grid empty-state"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
