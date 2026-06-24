@@ -425,7 +425,7 @@
           </div>
           <div id="credit-report-dropzone" class="drop-zone" tabindex="0" role="button" aria-label="Upload PDF or TXT credit report">
             <strong>Drop credit report here</strong>
-            <span>Text-based PDF and TXT files supported. Low-confidence extracts go to Manual Review Queue.</span>
+            <span>Text PDFs, scanned/image PDFs, and TXT files supported. OCR runs automatically before Manual Review Queue.</span>
             <input id="credit-report-upload" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
             <button id="credit-report-upload-button" class="primary" type="button">Upload Report</button>
             <button id="open-manual-review" class="secondary" type="button">Open Manual Review</button>
@@ -438,6 +438,7 @@
               <li>No report uploaded.</li>
               <li>Processing report</li>
               <li>Report analyzed</li>
+              <li>Running OCR analysis. This may take 30-90 seconds.</li>
               <li>Manual review required</li>
             </ul>
           </section>
