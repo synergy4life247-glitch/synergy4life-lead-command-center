@@ -1242,3 +1242,130 @@ main,
     font-size: .78rem;
   }
 }
+
+/* iPhone-first responsiveness pass */
+img,
+svg,
+canvas,
+video,
+iframe,
+table,
+pre,
+textarea,
+input,
+select,
+button {
+  max-width: 100%;
+}
+
+.panel > *,
+.dashboard-sections > *,
+.intelligence-grid > *,
+.report-master-grid > *,
+.metrics-grid > *,
+.card-grid > *,
+.form-grid > * {
+  min-width: 0;
+}
+
+.credit-file-sticky-controls {
+  top: .5rem;
+  bottom: auto;
+  align-self: start;
+}
+
+.raw-preview-card details {
+  display: grid;
+  gap: .75rem;
+}
+
+.raw-preview-card summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .75rem;
+  cursor: pointer;
+  color: var(--brand-dark);
+  font-weight: 900;
+  list-style: none;
+}
+
+.raw-preview-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary-hint {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+}
+
+.table-scroll table {
+  width: max-content;
+  min-width: 860px;
+  max-width: none;
+}
+
+@media (max-width: 640px) {
+  .credit-file-sticky-controls {
+    position: sticky;
+    top: .5rem;
+    bottom: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .upload-console,
+  .manual-review-form,
+  .parser-training-lab,
+  .credit-intel-dashboard,
+  .report-master-grid,
+  .intelligence-grid {
+    gap: .85rem;
+  }
+
+  .drop-zone {
+    min-height: auto;
+    align-items: stretch;
+  }
+
+  .drop-zone button,
+  .credit-file-sticky-controls button {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .raw-preview-card summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .table-scroll table {
+    display: table;
+    width: max-content;
+    min-width: 760px;
+  }
+
+  .table-scroll thead { display: table-header-group; }
+  .table-scroll tbody { display: table-row-group; }
+  .table-scroll tr { display: table-row; }
+  .table-scroll th,
+  .table-scroll td {
+    display: table-cell;
+    width: auto;
+    min-width: 120px;
+    white-space: normal;
+  }
+}

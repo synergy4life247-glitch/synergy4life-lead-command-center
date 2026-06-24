@@ -196,6 +196,8 @@ const creditReportUploadStatus = document.querySelector('#credit-report-upload-s
 const openManualReviewButton = document.querySelector('#open-manual-review');
 const clearCurrentReportButton = document.querySelector('#clear-current-report');
 const clearCurrentReportStickyButton = document.querySelector('#clear-current-report-sticky');
+const openManualReviewStickyButton = document.querySelector('#open-manual-review-sticky');
+const viewParserDebugStickyButton = document.querySelector('#view-parser-debug-sticky');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const parserCorrectionForm = document.querySelector('#parser-correction-form');
 const approveFinalAnalysisButton = document.querySelector('#approve-final-analysis');
@@ -1801,7 +1803,7 @@ function renderReportMasterReaderLab(report) {
     <article class="card parser-failed-fields ${failed.length ? 'has-failures' : 'no-failures'}"><div class="card-topline"><span class="badge warning-badge">Parser review</span></div><h3>Failed Parser Fields</h3><p>${failed.length ? escapeHtml(failed.join(' • ')) : 'No failed fields detected.'}</p></article>
     <article class="card"><h3>Report Master Reader</h3><dl>${detail('Provider detected', debug.providerDetected || metadata.provider || 'Unknown')}${detail('Extraction method used', metadata.extractionMode || 'Unknown')}${detail('OCR status', ocrStatus)}${detail('Confidence score', confidence)}</dl></article>
     <article class="card"><h3>Parsed Fields</h3><pre>${escapeHtml(renderParsedFields(report))}</pre></article>
-    <article class="card raw-preview-card"><h3>Raw Extracted Text Preview</h3><p class="group">Tap the box below to select and copy the extracted text on mobile.</p><textarea class="raw-text-preview" readonly>${escapeHtml(rawPreview).slice(0, 5200)}</textarea></article>
+    <article class="card raw-preview-card"><details open><summary><span>Raw Extracted Text Preview</span><span class="summary-hint">Tap to collapse or expand</span></summary><p class="group">Tap the box below to select and copy the extracted text on mobile.</p><textarea class="raw-text-preview" readonly>${escapeHtml(rawPreview).slice(0, 12000)}</textarea></details></article>
     ${renderParserAccuracyChecklist(report)}
   </section>`;
 }
@@ -1851,7 +1853,7 @@ function renderParserDebug(report) {
   const htmlDebug = report?.metadata?.htmlDebug || {};
   const listValue = (value) => Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : (value || 'None');
   const htmlStructureDebug = report?.metadata?.htmlReportDetected ? `${detail('HTML text length', htmlDebug.htmlTextLength)}${detail('Number of tables', htmlDebug.tableCount)}${detail('Number of rows', htmlDebug.rowCount)}${detail('Number of visible text nodes', htmlDebug.visibleTextNodeCount)}${detail('IdentityIQ markers found', listValue(htmlDebug.identityIqMarkersFound))}${htmlDebug.identityIqMarkerMessage ? detail('IdentityIQ marker warning', htmlDebug.identityIqMarkerMessage) : ''}` : '';
-  const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card"><h3>RAW EXTRACTED TEXT PREVIEW</h3><pre>${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.')}</pre></article>` : '';
+  const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card raw-preview-card"><details><summary><span>Raw Extracted Text Preview</span><span class="summary-hint">Tap to expand</span></summary><pre class="raw-text-preview">${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.')}</pre></details></article>` : '';
   return `<article class="card parser-debug-card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}${htmlStructureDebug}</dl></article>${rawPreview}`;
 }
 
@@ -3635,6 +3637,11 @@ creditReportUploadNewButton?.addEventListener('click', () => creditReportUpload?
 openManualReviewButton?.addEventListener('click', openManualReviewMode);
 clearCurrentReportButton?.addEventListener('click', clearCurrentCreditReport);
 clearCurrentReportStickyButton?.addEventListener('click', clearCurrentCreditReport);
+openManualReviewStickyButton?.addEventListener('click', openManualReviewMode);
+viewParserDebugStickyButton?.addEventListener('click', () => {
+  const target = document.querySelector('.parser-failed-fields.has-failures') || document.querySelector('.parser-debug-card') || creditFileIntelligenceDashboard;
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 parserCorrectionForm?.addEventListener('submit', storeParserCorrection);
 approveFinalAnalysisButton?.addEventListener('click', approveFinalAnalysis);
