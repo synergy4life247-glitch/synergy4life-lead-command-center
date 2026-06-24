@@ -192,6 +192,7 @@ const creditReportUploadButton = document.querySelector('#credit-report-upload-b
 const creditReportDropzone = document.querySelector('#credit-report-dropzone');
 const creditReportUploadStatus = document.querySelector('#credit-report-upload-status');
 const openManualReviewButton = document.querySelector('#open-manual-review');
+const clearCurrentReportButton = document.querySelector('#clear-current-report');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
 const creditFileIntelligenceDashboard = document.querySelector('#credit-file-intelligence-dashboard');
 const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
@@ -1051,7 +1052,7 @@ function renderCommunicationCard(item) {
 
 const parseUnavailableMessage = 'Report uploaded successfully. Manual review required because extraction confidence was low.';
 const uploadStatuses = {
-  none: 'No report uploaded',
+  none: 'No report uploaded.',
   processing: 'Processing report',
   analyzed: 'Report analyzed',
   manualReview: 'Manual review required',
@@ -1460,6 +1461,30 @@ function handleCreditReportFile(file) {
     renderCreditFileIntelligenceDashboard();
     openManualReviewMode();
   });
+}
+
+
+function removeStoredReportData(key) {
+  [key, ...(STORE_ALIASES[key] || [])].forEach((storeKey) => {
+    localStorage.removeItem(storeKey);
+    sessionStorage.removeItem(storeKey);
+  });
+}
+
+function clearCurrentCreditReport() {
+  if (!window.confirm('Are you sure you want to clear the current report analysis?')) return;
+  const report = getCreditFileIntelligence();
+  if (report?.id) {
+    const queue = readStore(MANUAL_REVIEW_QUEUE_KEY);
+    writeStore(MANUAL_REVIEW_QUEUE_KEY, queue.filter((queued) => queued.id !== report.id));
+    sessionStorage.removeItem(MANUAL_REVIEW_QUEUE_KEY);
+  }
+  removeStoredReportData(CREDIT_FILE_INTELLIGENCE_KEY);
+  creditReportUpload && (creditReportUpload.value = '');
+  manualCreditAnalysisForm?.reset();
+  manualCreditAnalysisForm?.classList.remove('manual-review-active');
+  setCreditUploadStatus(uploadStatuses.none);
+  renderCreditFileIntelligenceDashboard();
 }
 
 function saveManualCreditAnalysis(event) {
@@ -3150,6 +3175,7 @@ creditFileForm.addEventListener('submit', saveCreditFile);
 creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.click());
 openManualReviewButton?.addEventListener('click', openManualReviewMode);
+clearCurrentReportButton?.addEventListener('click', clearCurrentCreditReport);
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
 creditReportUpload?.addEventListener('change', (event) => handleCreditReportFile(event.target.files[0]));
 creditReportDropzone?.addEventListener('dragover', (event) => { event.preventDefault(); creditReportDropzone.classList.add('drag-over'); });
