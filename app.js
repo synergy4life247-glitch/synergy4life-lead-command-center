@@ -1156,7 +1156,7 @@ function isHtmlCreditReportFile(file) {
 function sanitizeCreditReportHtml(html) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(String(html || ''), 'text/html');
-  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link[rel="import"]').forEach((element) => element.remove());
+  doc.querySelectorAll('script, style, noscript, object, embed, link[rel="import"]').forEach((element) => element.remove());
   doc.querySelectorAll('*').forEach((element) => {
     [...element.attributes].forEach((attribute) => {
       const name = attribute.name.toLowerCase();
@@ -1181,6 +1181,17 @@ function isVisibleHtmlNode(node) {
     parent = parent.parentElement;
   }
   return true;
+}
+
+function normalizeExtractedHtmlText(value) {
+  return String(value || '').replace(/[\t\f\v ]+/g, ' ').replace(/\n\s+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function pushUniqueText(parts, seen, value) {
+  const text = normalizeExtractedHtmlText(value);
+  if (!text || seen.has(text)) return;
+  seen.add(text);
+  parts.push(text);
 }
 
 function collectVisibleTextNodes(root) {
@@ -1208,61 +1219,119 @@ function collectRecursiveVisibleText(node, parts = []) {
   return parts;
 }
 
-function extractVisibleTextFromHtmlDocument(doc) {
+function collectIframeDocuments(doc) {
+  return [...doc.querySelectorAll('iframe')].map((iframe) => {
+    if (!isVisibleHtmlNode(iframe)) return null;
+    if (iframe.srcdoc) return sanitizeCreditReportHtml(iframe.srcdoc);
+    return iframe.contentDocument || iframe.contentWindow?.document || null;
+  }).filter(Boolean);
+}
+
+function extractVisibleTextFromSingleHtmlDocument(doc, parts, seen, stats) {
   doc.querySelectorAll('[hidden], [aria-hidden="true"], input[type="hidden"]').forEach((element) => element.remove());
   doc.querySelectorAll('*').forEach((element) => {
     if (isHiddenHtmlElement(element)) element.remove();
   });
 
-  const visibleSelectors = 'body, table, tr, td, th, div, span, p, li';
-  const visibleTextNodes = collectVisibleTextNodes(doc.body || doc.documentElement);
-  const parts = [...visibleTextNodes];
+  const root = doc.body || doc.documentElement;
+  const visibleSelectors = 'body, table, tr, td, th, div, span, p, li, section, article';
+  const visibleTextNodes = collectVisibleTextNodes(root);
+  const recursiveText = collectRecursiveVisibleText(root).join('\n');
+  const domText = normalizeExtractedHtmlText([doc.documentElement?.innerText, root?.innerText, root?.textContent].filter(Boolean).join('\n'));
+  stats.domTextLength += domText.length;
+  stats.tableCount += doc.querySelectorAll('table').length;
+  stats.rowCount += doc.querySelectorAll('tr').length;
+  stats.visibleTextNodeCount += visibleTextNodes.length;
+
+  pushUniqueText(parts, seen, doc.documentElement?.innerText || '');
+  pushUniqueText(parts, seen, root?.innerText || '');
+  pushUniqueText(parts, seen, root?.textContent || '');
+  visibleTextNodes.forEach((text) => pushUniqueText(parts, seen, text));
+  pushUniqueText(parts, seen, recursiveText);
+
+  doc.querySelectorAll('td, th').forEach((cell) => pushUniqueText(parts, seen, cell.innerText || cell.textContent || ''));
   doc.querySelectorAll(visibleSelectors).forEach((element) => {
     if (!isVisibleHtmlNode(element)) return;
-    const isRowLike = /^(?:TABLE|TR)$/i.test(element.tagName);
+    pushUniqueText(parts, seen, element.innerText || element.textContent || '');
     const directText = [...element.childNodes]
       .filter((child) => child.nodeType === Node.TEXT_NODE)
       .map((child) => child.nodeValue.replace(/\s+/g, ' ').trim())
       .filter(Boolean)
       .join(' ');
-    const text = (isRowLike ? (element.innerText || element.textContent || '') : directText).replace(/\s+/g, ' ').trim();
-    if (text) parts.push(text);
+    pushUniqueText(parts, seen, directText);
   });
-  if (!parts.length && doc.body?.textContent) parts.push(doc.body.textContent.replace(/\s+/g, ' ').trim());
+}
 
-  let text = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  const secondaryParts = [];
-  if (text.length < 1000) {
-    secondaryParts.push(
-      (doc.documentElement?.innerText || '').replace(/\s+/g, ' ').trim(),
-      (doc.body?.textContent || '').replace(/\s+/g, ' ').trim(),
-      collectRecursiveVisibleText(doc.body || doc.documentElement).join('\n')
-    );
-    text = [text, ...secondaryParts].filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  }
+function extractVisibleTextFromHtmlDocument(doc, options = {}) {
+  const parts = [];
+  const seen = new Set();
+  const stats = { domTextLength: 0, tableCount: 0, rowCount: 0, visibleTextNodeCount: 0, iframeCount: doc.querySelectorAll('iframe').length, iframeDocumentsRead: 0, ocrTextLength: options.ocrTextLength || 0 };
+  extractVisibleTextFromSingleHtmlDocument(doc, parts, seen, stats);
+  const iframeDocs = collectIframeDocuments(doc);
+  stats.iframeDocumentsRead = iframeDocs.length;
+  iframeDocs.forEach((iframeDoc) => extractVisibleTextFromSingleHtmlDocument(iframeDoc, parts, seen, stats));
+  if (options.ocrText) pushUniqueText(parts, seen, options.ocrText);
 
+  const text = normalizeExtractedHtmlText(parts.join('\n'));
   const identityIqMarkers = ['Credit Score', 'Vantage Score', 'Personal Information', 'Account Summary', 'Account History'];
   const markersFound = identityIqMarkers.filter((marker) => new RegExp(marker.replace(/ /g, '\\s+'), 'i').test(text));
   return {
     text,
     debug: {
       htmlTextLength: text.length,
-      tableCount: doc.querySelectorAll('table').length,
-      rowCount: doc.querySelectorAll('tr').length,
-      visibleTextNodeCount: visibleTextNodes.length,
-      rawExtractedTextPreview: text.slice(0, 5000),
+      domTextLength: stats.domTextLength,
+      tableCount: stats.tableCount,
+      rowCount: stats.rowCount,
+      iframeCount: stats.iframeCount,
+      iframeDocumentsRead: stats.iframeDocumentsRead,
+      visibleTextNodeCount: stats.visibleTextNodeCount,
+      ocrTextLength: stats.ocrTextLength,
+      rawExtractedTextPreview: text.slice(0, 3000),
+      rawExtractedTextCharacterCount: text.length,
       identityIqMarkersFound: markersFound,
       identityIqMarkerMessage: markersFound.length ? '' : 'IdentityIQ markers not found in extracted HTML text.',
-      secondaryExtractionAttempted: text.length < 1000 || secondaryParts.some(Boolean),
+      secondaryExtractionAttempted: true,
     },
   };
 }
 
-async function extractHtmlReportText(file) {
-  const doc = sanitizeCreditReportHtml(await file.text());
-  return extractVisibleTextFromHtmlDocument(doc);
+async function runHtmlOcr(html) {
+  const Tesseract = window.Tesseract || await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js', 'Tesseract');
+  const html2canvas = window.html2canvas || await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas');
+  const frame = document.createElement('iframe');
+  frame.setAttribute('sandbox', 'allow-same-origin');
+  frame.style.position = 'fixed';
+  frame.style.left = '-10000px';
+  frame.style.top = '0';
+  frame.style.width = '1200px';
+  frame.style.height = '1600px';
+  document.body.appendChild(frame);
+  await new Promise((resolve) => {
+    frame.onload = resolve;
+    frame.srcdoc = String(html || '');
+  });
+  const target = frame.contentDocument?.body || frame.contentDocument?.documentElement;
+  const canvas = await html2canvas(target, { backgroundColor: '#ffffff', scale: 1, windowWidth: 1200, windowHeight: Math.max(1600, target?.scrollHeight || 1600) });
+  const result = await Tesseract.recognize(canvas, 'eng');
+  frame.remove();
+  return { text: result?.data?.text || '', confidence: typeof result?.data?.confidence === 'number' ? result.data.confidence / 100 : 0 };
 }
 
+async function extractHtmlReportText(file) {
+  const html = await file.text();
+  let extraction = extractVisibleTextFromHtmlDocument(sanitizeCreditReportHtml(html));
+  const provider = detectCreditReportProvider(extraction.text);
+  if (provider === 'IdentityIQ' && extraction.text.length < 10000) {
+    setCreditUploadStatus('IdentityIQ HTML text is incomplete. Running OCR fallback.');
+    const ocr = await runHtmlOcr(html);
+    extraction = extractVisibleTextFromHtmlDocument(sanitizeCreditReportHtml(html), { ocrText: ocr.text, ocrTextLength: ocr.text.length });
+    extraction.debug.ocrConfidence = ocr.confidence;
+    extraction.debug.ocrFallbackTriggered = true;
+  } else {
+    extraction.debug.ocrFallbackTriggered = false;
+  }
+  return extraction;
+}
 async function readCreditReportFile(file) {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
     return extractPdfText(await loadPdfDocument(file));
@@ -1822,7 +1891,7 @@ function renderReportMasterReaderLab(report) {
     <article class="card parser-failed-fields ${failed.length ? 'has-failures' : 'no-failures'}"><div class="card-topline"><span class="badge warning-badge">Parser review</span></div><h3>Failed Parser Fields</h3><p>${failed.length ? escapeHtml(failed.join(' • ')) : 'No failed fields detected.'}</p></article>
     <article class="card"><h3>Report Master Reader</h3><dl>${detail('Provider detected', debug.providerDetected || metadata.provider || 'Unknown')}${detail('Extraction method used', metadata.extractionMode || 'Unknown')}${detail('OCR status', ocrStatus)}${detail('Confidence score', confidence)}</dl></article>
     <article class="card"><h3>Parsed Fields</h3><pre>${escapeHtml(renderParsedFields(report))}</pre></article>
-    <article class="card raw-preview-card"><details open><summary><span>Raw Extracted Text Preview</span><span class="summary-hint">Tap to collapse or expand</span></summary><p class="group">Tap the box below to select and copy the extracted text on mobile.</p><textarea class="raw-text-preview" readonly>${escapeHtml(rawPreview).slice(0, 12000)}</textarea></details></article>
+    <article class="card raw-preview-card"><details open><summary><span>Raw Text Preview</span><span class="summary-hint">Tap to collapse or expand</span></summary><p class="group">Showing first 3,000 characters. Total extracted characters: ${escapeHtml(String(metadata.htmlDebug?.rawExtractedTextCharacterCount || rawPreview.length || 0))}.</p><textarea class="raw-text-preview" readonly>${escapeHtml(rawPreview).slice(0, 3000)}</textarea></details></article>
     ${renderParserAccuracyChecklist(report)}
   </section>`;
 }
@@ -1871,8 +1940,8 @@ function renderParserDebug(report) {
   const debug = report?.parserDebug || {};
   const htmlDebug = report?.metadata?.htmlDebug || {};
   const listValue = (value) => Array.isArray(value) ? (value.length ? value.join(', ') : 'None') : (value || 'None');
-  const htmlStructureDebug = report?.metadata?.htmlReportDetected ? `${detail('HTML text length', htmlDebug.htmlTextLength)}${detail('Number of tables', htmlDebug.tableCount)}${detail('Number of rows', htmlDebug.rowCount)}${detail('Number of visible text nodes', htmlDebug.visibleTextNodeCount)}${detail('IdentityIQ markers found', listValue(htmlDebug.identityIqMarkersFound))}${htmlDebug.identityIqMarkerMessage ? detail('IdentityIQ marker warning', htmlDebug.identityIqMarkerMessage) : ''}` : '';
-  const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card raw-preview-card"><details><summary><span>Raw Extracted Text Preview</span><span class="summary-hint">Tap to expand</span></summary><pre class="raw-text-preview">${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.')}</pre></details></article>` : '';
+  const htmlStructureDebug = report?.metadata?.htmlReportDetected ? `${detail('HTML text length', htmlDebug.htmlTextLength)}${detail('DOM text length', htmlDebug.domTextLength)}${detail('Table count', htmlDebug.tableCount)}${detail('Number of rows', htmlDebug.rowCount)}${detail('Iframe count', htmlDebug.iframeCount)}${detail('Same-origin iframes read', htmlDebug.iframeDocumentsRead)}${detail('OCR text length', htmlDebug.ocrTextLength || 0)}${detail('OCR fallback triggered', htmlDebug.ocrFallbackTriggered ? 'Yes' : 'No')}${detail('Number of visible text nodes', htmlDebug.visibleTextNodeCount)}${detail('IdentityIQ markers found', listValue(htmlDebug.identityIqMarkersFound))}${htmlDebug.identityIqMarkerMessage ? detail('IdentityIQ marker warning', htmlDebug.identityIqMarkerMessage) : ''}` : '';
+  const rawPreview = report?.metadata?.htmlReportDetected ? `<article class="card raw-preview-card"><details><summary><span>Raw Text Preview</span><span class="summary-hint">Tap to expand</span></summary><p class="group">Showing first 3,000 characters. Total extracted characters: ${escapeHtml(String(htmlDebug.rawExtractedTextCharacterCount || 0))}.</p><pre class="raw-text-preview">${escapeHtml(htmlDebug.rawExtractedTextPreview || 'No HTML text extracted.').slice(0, 3000)}</pre></details></article>` : '';
   return `<article class="card parser-debug-card"><h3>Parser Debug Output</h3><dl>${detail('Provider detected', debug.providerDetected || report?.metadata?.provider || 'Unknown')}${detail('Scores detected', listValue(debug.scoresDetected))}${detail('Client name detected', debug.clientNameDetected || 'None')}${detail('Account summary detected', listValue(debug.accountSummaryDetected))}${detail('Tradelines detected', listValue(debug.tradelinesDetected))}${htmlStructureDebug}</dl></article>${rawPreview}`;
 }
 
