@@ -228,3 +228,47 @@ button:disabled {
 @media (min-width: 720px) {
   .task-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+.mortgage-metrics .metric-card { min-height: 88px; }
+.mortgage-form { position: relative; }
+.readiness-preview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .75rem;
+  padding: .85rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 1rem;
+  background: #eff6ff;
+}
+.preview-card {
+  display: grid;
+  gap: .25rem;
+  padding: .85rem;
+  border: 1px solid var(--line);
+  border-radius: .9rem;
+  background: white;
+}
+.preview-card span {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.preview-card strong {
+  color: var(--brand-dark);
+  font-size: 1.25rem;
+}
+.preview-card p { margin: 0; color: #344054; font-weight: 700; line-height: 1.45; }
+.preview-card.recommendations { grid-column: 1 / -1; }
+.mortgage-card dl { grid-template-columns: 1fr; }
+.mortgage-card dd { white-space: pre-wrap; }
+
+@media (min-width: 720px) {
+  .mortgage-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .readiness-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1000px) {
+  .readiness-preview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
