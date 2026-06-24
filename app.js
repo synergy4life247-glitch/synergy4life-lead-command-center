@@ -1,3 +1,16 @@
+const IGNORED_QUERY_PARAMS = new Set(['utm_source', 'utm_medium', 'utm_campaign']);
+
+function stripIgnoredQueryParameters() {
+  if (!window.location.search) return;
+  const params = new URLSearchParams(window.location.search);
+  const hasIgnoredOrUnknownParams = Array.from(params.keys()).some((key) => IGNORED_QUERY_PARAMS.has(key) || key);
+  if (!hasIgnoredOrUnknownParams) return;
+  const cleanUrl = `${window.location.pathname}${window.location.hash}`;
+  window.history.replaceState(window.history.state, document.title, cleanUrl);
+}
+
+stripIgnoredQueryParameters();
+
 const CONVERSATIONS_KEY = 'synergy4life.groupConversations';
 const LEADS_KEY = 'synergy4life.leads';
 const CLIENTS_KEY = 'synergy4life.clients';
@@ -3555,13 +3568,38 @@ document.querySelectorAll('.quick-action').forEach((button) => {
   });
 });
 
+function getTabFromHash() {
+  const tabName = window.location.hash.replace(/^#/, '');
+  return tabName ? document.querySelector(`.tab[data-tab="${CSS.escape(tabName)}"]`) : null;
+}
+
+function activateTab(tabName, { updateHash = true } = {}) {
+  const tab = document.querySelector(`.tab[data-tab="${CSS.escape(tabName)}"]`);
+  const panel = document.querySelector(`#${CSS.escape(tabName)}`);
+  if (!tab || !panel) return false;
+  document.querySelectorAll('.tab, .panel').forEach((item) => item.classList.remove('active'));
+  tab.classList.add('active');
+  panel.classList.add('active');
+  if (updateHash && window.location.hash !== `#${tabName}`) {
+    window.history.replaceState(window.history.state, document.title, `${window.location.pathname}#${tabName}`);
+  }
+  return true;
+}
+
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab, .panel').forEach((item) => item.classList.remove('active'));
-    tab.classList.add('active');
-    document.querySelector(`#${tab.dataset.tab}`).classList.add('active');
+    activateTab(tab.dataset.tab);
   });
 });
+
+window.addEventListener('hashchange', () => {
+  stripIgnoredQueryParameters();
+  const tab = getTabFromHash();
+  if (tab) activateTab(tab.dataset.tab, { updateHash: false });
+});
+
+const initialTab = getTabFromHash();
+if (initialTab) activateTab(initialTab.dataset.tab, { updateHash: false });
 
 seedSelect(document.querySelector('#creditIssueCategory'), creditIssueCategories);
 seedSelect(document.querySelector('#suggestedCta'), suggestedCtaOptions);
