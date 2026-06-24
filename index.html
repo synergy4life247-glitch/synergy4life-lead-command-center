@@ -41,6 +41,7 @@
             <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
             <button class="tab" type="button" data-tab="dispute-center">Dispute Center</button>
             <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
+            <button class="tab" type="button" data-tab="credit-file-intelligence">Credit File Intelligence</button>
             <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
             <button class="tab" type="button" data-tab="rebuild-center">Rebuild Center</button>
           </div>
@@ -403,6 +404,35 @@
         </div>
 
         <div id="credit-file-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="credit-file-intelligence" class="panel" aria-labelledby="credit-file-intelligence-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Credit report analysis</p>
+            <h2 id="credit-file-intelligence-heading">Credit File Intelligence Center</h2>
+            <p>Upload a PDF or TXT credit report to generate a stored intelligence dashboard with dispute, rebuild, mortgage, and client update recommendations.</p>
+          </div>
+          <span id="credit-file-intelligence-count" class="count-pill">Demo mode</span>
+        </div>
+
+        <section class="upload-console" aria-labelledby="credit-upload-heading">
+          <div>
+            <p class="eyebrow">Upload center</p>
+            <h3 id="credit-upload-heading">Credit Report Upload</h3>
+            <p>Drag and drop a PDF or TXT credit report, or choose a file from your device. Analysis is saved in local storage for now.</p>
+          </div>
+          <div id="credit-report-dropzone" class="drop-zone" tabindex="0" role="button" aria-label="Upload PDF or TXT credit report">
+            <strong>Drop credit report here</strong>
+            <span>PDF and TXT files supported</span>
+            <input id="credit-report-upload" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
+            <button id="credit-report-upload-button" class="primary" type="button">Upload Report</button>
+          </div>
+          <div id="credit-report-upload-status" class="upload-status" aria-live="polite">No report uploaded yet. Showing demo intelligence.</div>
+        </section>
+
+        <div id="credit-file-intelligence-dashboard" class="credit-intel-dashboard" aria-live="polite"></div>
       </section>
 
 
