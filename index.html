@@ -474,6 +474,30 @@
           </div>
         </form>
 
+        <section class="tracker-form parser-training-lab" aria-labelledby="parser-training-lab-heading">
+          <div>
+            <p class="eyebrow">Report Master Reader</p>
+            <h3 id="parser-training-lab-heading">Report Parser Training Lab</h3>
+            <p class="group">Review parser output for IdentityIQ, Credit Hero, and SmartCredit. Correct missed scores, names, accounts, balances, and bureaus before approving final strategy generation.</p>
+          </div>
+          <form id="parser-correction-form" class="correction-form">
+            <div class="form-grid">
+              <label>Correct client name<input id="correctClientName" name="correctClientName" /></label>
+              <label>Correct EQ score<input id="correctEqScore" name="correctEqScore" type="number" min="300" max="850" /></label>
+              <label>Correct EX score<input id="correctExScore" name="correctExScore" type="number" min="300" max="850" /></label>
+              <label>Correct TU score<input id="correctTuScore" name="correctTuScore" type="number" min="300" max="850" /></label>
+              <label>Correct account name<input id="correctAccountName" name="correctAccountName" /></label>
+              <label>Correct balance<input id="correctBalance" name="correctBalance" /></label>
+              <label>Correct bureau<select id="correctBureau" name="correctBureau"><option value="">Select bureau</option><option>Equifax</option><option>Experian</option><option>TransUnion</option><option>All 3 bureaus</option></select></label>
+            </div>
+            <label>Correction notes<textarea id="correctNotes" name="correctNotes" placeholder="Explain what the parser missed and where it appears in the report."></textarea></label>
+            <div class="form-actions">
+              <button class="secondary" type="submit">Save Parser Training Example</button>
+              <button id="approve-final-analysis" class="primary" type="button">Approve Final Analysis</button>
+            </div>
+          </form>
+        </section>
+
         <div id="credit-file-intelligence-dashboard" class="credit-intel-dashboard" aria-live="polite"></div>
       </section>
 

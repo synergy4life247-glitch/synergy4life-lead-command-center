@@ -8,6 +8,7 @@ const TASKS_KEY = 'synergy4life.tasks';
 const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
 const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 const CREDIT_FILE_INTELLIGENCE_KEY = 'synergy4life.creditFileIntelligence';
+const PARSER_TRAINING_EXAMPLES_KEY = 'synergy4life.parserTrainingExamples';
 const MANUAL_REVIEW_QUEUE_KEY = 'synergy4life.manualReviewQueue';
 const DASHBOARD_KEY = 'synergy4life.dashboard';
 const DOCUMENTS_KEY = 'synergy4life.documents';
@@ -194,6 +195,8 @@ const creditReportUploadStatus = document.querySelector('#credit-report-upload-s
 const openManualReviewButton = document.querySelector('#open-manual-review');
 const clearCurrentReportButton = document.querySelector('#clear-current-report');
 const manualCreditAnalysisForm = document.querySelector('#manual-credit-analysis-form');
+const parserCorrectionForm = document.querySelector('#parser-correction-form');
+const approveFinalAnalysisButton = document.querySelector('#approve-final-analysis');
 const creditFileIntelligenceDashboard = document.querySelector('#credit-file-intelligence-dashboard');
 const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
 const mortgageReadinessList = document.querySelector('#mortgage-readiness-list');
@@ -1055,6 +1058,7 @@ const uploadStatuses = {
   none: 'No report uploaded.',
   processing: 'Processing report',
   analyzed: 'Report analyzed',
+  awaitingApproval: 'Awaiting final analysis approval',
   manualReview: 'Manual review required',
 };
 
@@ -1323,6 +1327,30 @@ function shouldRunOcrFallback(report) {
   return !report.clientProfile?.name || !scores.some(Boolean) || !report.accounts?.length || report.parseConfidence?.score < 0.6;
 }
 
+function buildParserAccuracyChecklist(report) {
+  const scores = report?.clientProfile?.scores || {};
+  return {
+    nameFound: Boolean(report?.clientProfile?.name),
+    all3ScoresFound: ['equifax', 'experian', 'transUnion'].every((bureau) => isValidCreditScore(scores[bureau])),
+    accountSummaryFound: Boolean(report?.accountSummary && Object.values(report.accountSummary).some(Boolean)),
+    tradelinesFound: Boolean(report?.accounts?.length),
+    bureauDifferencesFound: Boolean(report?.bureauReportingDifferences?.length),
+    negativesCategorized: Boolean(report?.negative && Object.values(report.negative).some((value) => value !== '' && value !== null && value !== undefined)),
+    positivesCategorized: Boolean(report?.positive && Object.values(report.positive).some((value) => value !== '' && value !== null && value !== undefined)),
+  };
+}
+
+function getFailedParserFields(report) {
+  const checklist = buildParserAccuracyChecklist(report);
+  const labels = { nameFound: 'Name', all3ScoresFound: 'All 3 scores', accountSummaryFound: 'Account summary', tradelinesFound: 'Tradelines', bureauDifferencesFound: 'Bureau differences', negativesCategorized: 'Negatives categorized', positivesCategorized: 'Positives categorized' };
+  return Object.entries(checklist).filter(([, passed]) => !passed).map(([key]) => labels[key]);
+}
+
+function isValidCreditScore(value) {
+  const score = Number(value);
+  return Number.isInteger(score) && score >= 300 && score <= 850;
+}
+
 function buildParseConfidence(report) {
   const checks = [
     confidenceValue(report.clientProfile.name),
@@ -1338,10 +1366,10 @@ function buildParseConfidence(report) {
   const score = checks.reduce((sum, value) => sum + value, 0) / checks.length;
   const reasons = [];
   if (!report.clientProfile.name) reasons.push('client name not found');
-  if (!Object.values(report.clientProfile.scores || {}).some(Boolean)) reasons.push('bureau scores not found');
+  if (!Object.values(report.clientProfile.scores || {}).some(isValidCreditScore)) reasons.push('bureau scores not found');
   if (!report.accounts.length) reasons.push('account rows not found');
   if (score < 0.6) reasons.push('required fields below confidence threshold');
-  return { score: Math.round(score * 100) / 100, low: score < 0.6, reasons };
+  return { score: Math.round(score * 100) / 100, low: score < 0.8, reasons };
 }
 
 function extractCreditScoreSection(source) {
@@ -1420,6 +1448,18 @@ function getSection(source, startPattern, endPatterns = []) {
   return section.join('\n').trim();
 }
 
+function extractProviderScores(source, provider) {
+  const rules = {
+    SmartCredit: [/Equifax[^0-9]{0,40}(\d{3})[^0-9]{0,80}Experian[^0-9]{0,40}(\d{3})[^0-9]{0,80}Trans\s*Union[^0-9]{0,40}(\d{3})/i],
+    'Credit Hero': [/EQ[^0-9]{0,25}(\d{3})[^0-9]{0,60}EX[^0-9]{0,25}(\d{3})[^0-9]{0,60}TU[^0-9]{0,25}(\d{3})/i],
+  };
+  for (const pattern of rules[provider] || []) {
+    const match = source.replace(/\n/g, ' ').match(pattern);
+    if (match) return { equifax: match[1], experian: match[2], transUnion: match[3] };
+  }
+  return { equifax: extractScore(source, 'equifax'), experian: extractScore(source, 'experian'), transUnion: extractScore(source, 'transUnion') };
+}
+
 function extractIdentityIqScores(source) {
   const creditSection = getSection(source, /^Credit\s+Score$/i, [/^Personal\s+Information$/i, /^Account\s+Summary$/i, /^Quick\s+Links/i]);
   const scoreSource = creditSection || source;
@@ -1488,8 +1528,8 @@ function buildIdentityIqParseConfidence(report, detections) {
   if (detections.tradelinesFound) points += 25; else reasons.push('tradelines not found');
   if (detections.bureauDifferencesFound) points += 10; else reasons.push('bureau differences not detected');
   const score = points / 100;
-  if (score < 0.6) reasons.push(`IdentityIQ confidence below 60% (${points}%)`);
-  return { score, low: score < 0.6, reasons, provider: 'IdentityIQ', debug: detections };
+  if (score < 0.8) reasons.push(`IdentityIQ confidence below 80% (${points}%)`);
+  return { score, low: score < 0.8, reasons, provider: 'IdentityIQ', debug: detections };
 }
 
 function extractCurrency(line, labels) {
@@ -1619,12 +1659,13 @@ function parseCreditReportText(text, file, options = {}) {
   const report = {
     id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
     uploadStatus: uploadStatuses.analyzed,
-    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', htmlReportDetected: Boolean(options.htmlReportDetected), htmlDebug: options.htmlDebug || null, ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
-    analysis: 'parsed', verified: true, needsManualReview: false, source: 'upload', accounts,
+    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMethod: options.extractionMode || 'text', extractionMode: options.extractionMode || 'text', htmlReportDetected: Boolean(options.htmlReportDetected), htmlDebug: options.htmlDebug || null, ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
+    rawTextPreview: source.slice(0, 5000),
+    analysis: 'parsed', verified: false, approvedFinalAnalysis: false, needsManualReview: false, source: 'upload', accounts,
     bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
       name: identityIqData ? identityIqData.clientName : extractClientName(source),
-      scores: identityIqData ? identityIqData.scores : { equifax: extractScore(source, 'equifax'), experian: extractScore(source, 'experian'), transUnion: extractScore(source, 'transUnion') },
+      scores: identityIqData ? identityIqData.scores : extractProviderScores(source, provider),
       goal: 'Uploaded credit report analysis',
     },
     accountSummary: identityIqData ? identityIqData.accountSummary : null,
@@ -1651,11 +1692,17 @@ function parseCreditReportText(text, file, options = {}) {
     report.parserDebug = { providerDetected: provider, scoresDetected: Object.values(report.clientProfile.scores).filter(Boolean), clientNameDetected: report.clientProfile.name || '', accountSummaryDetected: [], tradelinesDetected: accounts.map((account) => account.name) };
     report.parseConfidence = buildParseConfidence(report);
   }
+  report.failedFields = getFailedParserFields(report);
+  report.parserAccuracyChecklist = buildParserAccuracyChecklist(report);
   if (report.parseConfidence.low) {
     report.uploadStatus = uploadStatuses.manualReview;
     report.verified = false;
     report.needsManualReview = true;
     report.parseMessage = `Manual review required: ${report.parseConfidence.reasons.join(', ') || 'low extraction confidence'}.`;
+  }
+  if (!report.needsManualReview) {
+    report.uploadStatus = uploadStatuses.awaitingApproval;
+    report.parseMessage = 'Parser confidence is high enough for review. Approve Final Analysis before strategy generation.';
   }
   return report;
 }
@@ -1721,6 +1768,81 @@ function strategyForCreditFile(report) {
 }
 
 
+
+function renderParserAccuracyChecklist(report) {
+  const checklist = report?.parserAccuracyChecklist || buildParserAccuracyChecklist(report);
+  const labels = { nameFound: 'Name found', all3ScoresFound: 'All 3 scores found', accountSummaryFound: 'Account summary found', tradelinesFound: 'Tradelines found', bureauDifferencesFound: 'Bureau differences found', negativesCategorized: 'Negatives categorized', positivesCategorized: 'Positives categorized' };
+  return `<article class="card"><h3>Parser Accuracy Checklist</h3><ul class="checklist">${Object.entries(labels).map(([key, label]) => `<li class="${checklist[key] ? 'pass' : 'fail'}">${checklist[key] ? '✓' : 'Needs review'} ${escapeHtml(label)}</li>`).join('')}</ul></article>`;
+}
+
+function renderParsedFields(report) {
+  const fields = [
+    `Name: ${report?.clientProfile?.name || 'Missing'}`,
+    `EQ: ${report?.clientProfile?.scores?.equifax || 'Missing'}`,
+    `EX: ${report?.clientProfile?.scores?.experian || 'Missing'}`,
+    `TU: ${report?.clientProfile?.scores?.transUnion || 'Missing'}`,
+    `Accounts: ${(report?.accounts || []).length}`,
+    `Collections: ${report?.negative?.collections || 'None found'}`,
+    `Utilization: ${report?.positive?.utilization || 'Missing'}`,
+  ];
+  return fields.join('\n');
+}
+
+function renderReportMasterReaderLab(report) {
+  const metadata = report?.metadata || {};
+  const debug = report?.parserDebug || {};
+  const rawPreview = metadata.htmlDebug?.rawExtractedTextPreview || report?.rawTextPreview || 'Preview unavailable for this upload.';
+  const failed = report?.failedFields || getFailedParserFields(report);
+  const confidence = report?.parseConfidence ? `${Math.round(report.parseConfidence.score * 100)}%` : 'Unavailable';
+  const ocrStatus = metadata.extractionMode === 'ocr' ? `OCR used (${Math.round((metadata.ocrConfidence || 0) * 100)}%)` : (metadata.directParseConfidence ? 'OCR fallback skipped after direct parse' : 'Not used');
+  return `<section class="report-master-grid">
+    <article class="card"><h3>Report Master Reader</h3><dl>${detail('Provider detected', debug.providerDetected || metadata.provider || 'Unknown')}${detail('Extraction method used', metadata.extractionMode || 'Unknown')}${detail('OCR status', ocrStatus)}${detail('Confidence score', confidence)}${detail('Failed fields', failed.length ? failed.join(', ') : 'None detected')}</dl></article>
+    <article class="card"><h3>Parsed Fields</h3><pre>${escapeHtml(renderParsedFields(report))}</pre></article>
+    <article class="card"><h3>Raw Extracted Text Preview</h3><pre>${escapeHtml(rawPreview).slice(0, 5200)}</pre></article>
+    ${renderParserAccuracyChecklist(report)}
+  </section>`;
+}
+
+function storeParserCorrection(event) {
+  event.preventDefault();
+  const report = getCreditFileIntelligence();
+  if (!report) return;
+  const formData = new FormData(parserCorrectionForm);
+  const correction = Object.fromEntries(formData.entries());
+  const example = { id: crypto.randomUUID(), savedAt: new Date().toISOString(), provider: report.metadata?.provider || 'Unknown', extractionMode: report.metadata?.extractionMode || 'unknown', fileName: report.fileName, failedFields: report.failedFields || [], correction };
+  writeStore(PARSER_TRAINING_EXAMPLES_KEY, [example, ...readStore(PARSER_TRAINING_EXAMPLES_KEY)]);
+  if (correction.correctClientName) report.clientProfile.name = correction.correctClientName.trim();
+  if (isValidCreditScore(correction.correctEqScore)) report.clientProfile.scores.equifax = correction.correctEqScore;
+  if (isValidCreditScore(correction.correctExScore)) report.clientProfile.scores.experian = correction.correctExScore;
+  if (isValidCreditScore(correction.correctTuScore)) report.clientProfile.scores.transUnion = correction.correctTuScore;
+  if (correction.correctAccountName) report.accounts = [...(report.accounts || []), { name: correction.correctAccountName.trim(), balance: correction.correctBalance.trim(), bureaus: correction.correctBureau === 'All 3 bureaus' ? ['Equifax', 'Experian', 'TransUnion'] : [correction.correctBureau].filter(Boolean), type: '', paymentStatus: '', latePayments: '', openClosedStatus: '', utilization: '' }];
+  report.parserAccuracyChecklist = buildParserAccuracyChecklist(report);
+  report.failedFields = getFailedParserFields(report);
+  report.needsManualReview = report.failedFields.length > 0;
+  report.verified = false;
+  report.approvedFinalAnalysis = false;
+  report.uploadStatus = report.needsManualReview ? uploadStatuses.manualReview : uploadStatuses.awaitingApproval;
+  report.parseMessage = report.needsManualReview ? 'Manual corrections saved as parser training examples. Review remaining failed fields before approval.' : 'Manual corrections saved. Approve Final Analysis to generate strategy.';
+  writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
+  parserCorrectionForm.reset();
+  renderCreditFileIntelligenceDashboard();
+}
+
+function approveFinalAnalysis() {
+  const report = getCreditFileIntelligence();
+  if (!report) return;
+  report.parserAccuracyChecklist = buildParserAccuracyChecklist(report);
+  report.failedFields = getFailedParserFields(report);
+  report.approvedFinalAnalysis = true;
+  report.verified = true;
+  report.needsManualReview = false;
+  report.uploadStatus = uploadStatuses.analyzed;
+  report.parseMessage = 'Final analysis approved by user.';
+  writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
+  setCreditUploadStatus(uploadStatuses.analyzed);
+  renderCreditFileIntelligenceDashboard();
+}
+
 function renderParserDebug(report) {
   const debug = report?.parserDebug || {};
   const htmlDebug = report?.metadata?.htmlDebug || {};
@@ -1740,10 +1862,10 @@ function renderCreditFileIntelligenceDashboard() {
     creditFileIntelligenceDashboard.innerHTML = '<article class="card"><span class="badge warning-badge">No report analyzed yet.</span><h3>No report analyzed yet.</h3><dl><div><dt>Client</dt><dd>—</dd></div><div><dt>Scores</dt><dd>—</dd></div><div><dt>Analysis</dt><dd>—</dd></div></dl></article>';
     return;
   }
-  if (!report.verified) {
+  if (!report.verified || !report.approvedFinalAnalysis) {
     setCreditUploadStatus(report.parseMessage || parseUnavailableMessage);
     const confidence = report.parseConfidence ? `Confidence: ${Math.round(report.parseConfidence.score * 100)}%` : 'Confidence unavailable';
-    creditFileIntelligenceDashboard.innerHTML = `<article class="card"><div class="card-topline"><span class="badge warning-badge">Manual Review Queue</span></div><h3>Manual review required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p>${escapeHtml(confidence)}. No missing values were guessed.</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>${renderParserDebug(report)}`;
+    creditFileIntelligenceDashboard.innerHTML = `${renderReportMasterReaderLab(report)}<article class="card"><div class="card-topline"><span class="badge warning-badge">Manual Review Queue</span></div><h3>Approval required</h3><p>${escapeHtml(report.parseMessage || parseUnavailableMessage)}</p><p>${escapeHtml(confidence)}. No missing values were guessed. Save corrections, then approve before final strategy generation.</p><p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p></article>${renderParserDebug(report)}`;
     return;
   }
   const { disputes, rebuild } = strategyForCreditFile(report);
@@ -1759,11 +1881,14 @@ function renderCreditFileIntelligenceDashboard() {
     <div class="intelligence-grid">
       <article class="card"><h3>Negative Account Intelligence</h3><dl>${detail('Collections', n.collections)}${detail('Charge-offs', n.chargeOffs)}${detail('Repossessions', n.repossessions)}${detail('Late payments', n.latePayments)}${detail('Inquiries', n.inquiries)}${detail('Bankruptcy', n.bankruptcies)}${detail('Student loans', n.studentLoans)}${detail('Bureau differences', (report.bureauReportingDifferences || []).join('\n'))}</dl></article>
       <article class="card"><h3>Positive Credit Line Intelligence</h3><dl>${detail('Open revolving accounts', p.revolving)}${detail('Installment accounts', p.installment)}${detail('Mortgage history', p.mortgageHistory)}${detail('Auto loan', p.autoLoans)}${detail('Authorized users', p.authorizedUsers)}${detail('Utilization analysis', p.utilization)}${detail('Notes', report.notes)}</dl></article>
-      <article class="card"><h3>Recommended Dispute Strategy</h3>${list(disputes)}</article>
-      <article class="card"><h3>Recommended Rebuild Strategy</h3>${list(rebuild)}</article>
+      <article class="card"><h3>Dispute Priorities</h3>${list(disputes)}</article>
+      <article class="card"><h3>Factual Dispute Angles</h3>${list(disputes.map((item) => `Factual angle: ${item}`))}</article>
+      <article class="card"><h3>Rebuild Plan</h3>${list(rebuild)}</article>
+      <article class="card"><h3>30/60/90 Day Game Plan</h3>${list(['30 days: verify corrected parser data, document evidence, and send first factual disputes.', '60 days: review bureau responses, update inaccurate verified items, and optimize utilization.', '90 days: prepare next dispute round, strengthen positive tradelines, and reassess mortgage readiness.'])}</article>
+      ${renderReportMasterReaderLab(report)}
       ${renderParserDebug(report)}
       <article class="card account-table-card"><h3>Extracted Account-Level Data</h3><div class="table-scroll"><table><thead><tr><th>Account</th><th>Type</th><th>Balance</th><th>Payment</th><th>Lates</th><th>Open/Closed</th><th>Util.</th><th>Bureaus</th></tr></thead><tbody>${accountRows || '<tr><td colspan="8">No account rows extracted.</td></tr>'}</tbody></table></div></article>
-      <article class="card"><h3>Client Update Message Generator</h3><textarea readonly>${escapeHtml(updateMessage)}</textarea></article>
+      <article class="card"><h3>Client Update Message</h3><textarea readonly>${escapeHtml(updateMessage)}</textarea></article>
     </div>
     <p class="group">Source: ${escapeHtml(report.fileName)} • ${formatDateTime(report.uploadedAt)}</p>`;
 }
@@ -1779,7 +1904,7 @@ function handleCreditReportFile(file) {
   analyzeCreditReportFile(file).then((report) => {
     if (report.needsManualReview) enqueueManualReview(report);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-    setCreditUploadStatus(report.metadata?.htmlReportDetected ? 'HTML Report Detected' : (report.needsManualReview ? (report.parseMessage || parseUnavailableMessage) : uploadStatuses.analyzed));
+    setCreditUploadStatus(report.needsManualReview ? (report.parseMessage || parseUnavailableMessage) : (report.uploadStatus || uploadStatuses.awaitingApproval));
     renderCreditFileIntelligenceDashboard();
     if (report.needsManualReview) openManualReviewMode();
   }).catch(() => {
@@ -3506,6 +3631,8 @@ creditReportUploadButton?.addEventListener('click', () => creditReportUpload?.cl
 openManualReviewButton?.addEventListener('click', openManualReviewMode);
 clearCurrentReportButton?.addEventListener('click', clearCurrentCreditReport);
 manualCreditAnalysisForm?.addEventListener('submit', saveManualCreditAnalysis);
+parserCorrectionForm?.addEventListener('submit', storeParserCorrection);
+approveFinalAnalysisButton?.addEventListener('click', approveFinalAnalysis);
 creditReportUpload?.addEventListener('change', (event) => handleCreditReportFile(event.target.files[0]));
 creditReportDropzone?.addEventListener('dragover', (event) => { event.preventDefault(); creditReportDropzone.classList.add('drag-over'); });
 creditReportDropzone?.addEventListener('dragleave', () => creditReportDropzone.classList.remove('drag-over'));
