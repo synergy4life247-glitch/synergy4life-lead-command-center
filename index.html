@@ -16,6 +16,7 @@
 
     <nav class="tabs" aria-label="Primary navigation">
       <button class="tab active" type="button" data-tab="leads">Leads</button>
+      <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -29,6 +30,82 @@
           <span id="lead-count" class="count-pill">0 leads</span>
         </div>
         <div id="lead-list" class="card-grid empty-state"></div>
+      </section>
+
+      <section id="clients" class="panel" aria-labelledby="clients-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Client management</p>
+            <h2 id="clients-heading">Clients</h2>
+          </div>
+          <span id="client-count" class="count-pill">0 clients</span>
+        </div>
+
+        <div class="metrics-grid" aria-label="Client dashboard metrics">
+          <article class="metric-card"><span>Total Active Clients</span><strong id="metric-active-clients">0</strong></article>
+          <article class="metric-card"><span>Monthly Recurring Revenue</span><strong id="metric-mrr">$0</strong></article>
+          <article class="metric-card"><span>Total Initial Fees Collected</span><strong id="metric-initial-fees">$0</strong></article>
+          <article class="metric-card"><span>Clients in Round 1</span><strong id="metric-round-1">0</strong></article>
+          <article class="metric-card"><span>Clients in Round 2</span><strong id="metric-round-2">0</strong></article>
+          <article class="metric-card"><span>Mortgage Ready Clients</span><strong id="metric-mortgage-ready">0</strong></article>
+        </div>
+
+        <form id="client-form" class="tracker-form">
+          <input type="hidden" id="client-id" />
+          <div class="form-grid">
+            <label>Full Name<input id="fullName" name="fullName" placeholder="Jane Smith" required /></label>
+            <label>Phone<input id="phone" name="phone" type="tel" placeholder="(555) 123-4567" /></label>
+            <label>Email<input id="email" name="email" type="email" placeholder="jane@email.com" /></label>
+            <label>Current Score<input id="currentScore" name="currentScore" type="number" min="300" max="850" placeholder="620" /></label>
+            <label>Goal Score<input id="goalScore" name="goalScore" type="number" min="300" max="850" placeholder="720" /></label>
+            <label>Client Goal
+              <select id="clientGoal" name="clientGoal">
+                <option value="Home">Home</option>
+                <option value="Auto">Auto</option>
+                <option value="Business Funding">Business Funding</option>
+                <option value="Personal Credit">Personal Credit</option>
+              </select>
+            </label>
+            <label>Enrollment Date<input id="enrollmentDate" name="enrollmentDate" type="date" /></label>
+            <label>Initial Fee<input id="initialFee" name="initialFee" type="number" min="0" step="0.01" placeholder="499" /></label>
+            <label>Monthly Fee<input id="monthlyFee" name="monthlyFee" type="number" min="0" step="0.01" placeholder="149" /></label>
+            <label>Payment Status
+              <select id="paymentStatus" name="paymentStatus">
+                <option value="Current">Current</option>
+                <option value="Past Due">Past Due</option>
+                <option value="Paid in Full">Paid in Full</option>
+                <option value="Paused">Paused</option>
+              </select>
+            </label>
+            <label>Credit Monitoring Provider<input id="creditMonitoringProvider" name="creditMonitoringProvider" placeholder="SmartCredit, IdentityIQ" /></label>
+            <label>Last Dispute Sent<input id="lastDisputeSent" name="lastDisputeSent" type="date" /></label>
+            <label>Next Follow-Up Date<input id="nextFollowUpDate" name="nextFollowUpDate" type="date" /></label>
+            <label>Current Round<input id="currentRound" name="currentRound" type="number" min="1" placeholder="1" /></label>
+            <label>Assigned Team Member<input id="assignedTeamMember" name="assignedTeamMember" placeholder="Team member" /></label>
+            <label>Mortgage Ready
+              <select id="mortgageReady" name="mortgageReady"><option value="No">No</option><option value="Yes">Yes</option></select>
+            </label>
+            <label>Realtor Client
+              <select id="realtorClient" name="realtorClient"><option value="No">No</option><option value="Yes">Yes</option></select>
+            </label>
+          </div>
+          <label>Notes<textarea id="clientNotes" name="clientNotes" placeholder="Progress, objections, reminders, next steps"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Client</button>
+            <button id="reset-client-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel">
+          <label>Search Clients<input id="client-search" placeholder="Search name, phone, email, notes" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Goal<select id="goal-filter"><option value="">All goals</option></select></label>
+            <label>Filter by Payment Status<select id="payment-filter"><option value="">All statuses</option></select></label>
+            <label>Filter by Team Member<select id="team-filter"><option value="">All team members</option></select></label>
+          </div>
+        </div>
+
+        <div id="client-list" class="card-grid empty-state"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
