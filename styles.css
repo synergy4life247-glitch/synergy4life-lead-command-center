@@ -951,9 +951,21 @@ button:disabled {
 .upload-status {
   border-radius: .9rem;
   padding: .85rem 1rem;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 800;
+}
+.upload-status.status-success {
   background: #ecfdf5;
   color: #166534;
-  font-weight: 800;
+}
+.upload-status.status-warning {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.upload-status.status-neutral {
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 .upload-status-panel {
   display: grid;
