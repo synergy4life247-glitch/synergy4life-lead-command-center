@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Synergy4Life Lead Command Center</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Synergy4Life</p>
+        <h1>Lead Command Center</h1>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Primary navigation">
+      <button class="tab active" type="button" data-tab="leads">Leads</button>
+      <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
+    </nav>
+
+    <main>
+      <section id="leads" class="panel active" aria-labelledby="leads-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Pipeline</p>
+            <h2 id="leads-heading">Converted Leads</h2>
+          </div>
+          <span id="lead-count" class="count-pill">0 leads</span>
+        </div>
+        <div id="lead-list" class="card-grid empty-state"></div>
+      </section>
+
+      <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Community tracking</p>
+            <h2 id="group-conversations-heading">Group Conversations</h2>
+          </div>
+          <span id="conversation-count" class="count-pill">0 conversations</span>
+        </div>
+
+        <form id="conversation-form" class="tracker-form">
+          <input type="hidden" id="conversation-id" />
+          <div class="form-grid">
+            <label>Platform<input id="platform" name="platform" placeholder="Facebook, Instagram, LinkedIn" required /></label>
+            <label>Group Name<input id="groupName" name="groupName" placeholder="Wellness Moms Network" required /></label>
+            <label>Person Name<input id="personName" name="personName" placeholder="Jane Smith" required /></label>
+            <label>CTA Used<input id="ctaUsed" name="ctaUsed" placeholder="Comment WELLNESS / DM me" /></label>
+            <label>Lead Temperature
+              <select id="leadTemperature" name="leadTemperature">
+                <option value="Cold">Cold</option>
+                <option value="Warm" selected>Warm</option>
+                <option value="Hot">Hot</option>
+              </select>
+            </label>
+            <label>Follow-Up Needed
+              <select id="followUpNeeded" name="followUpNeeded">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </label>
+            <label>Follow-Up Date<input id="followUpDate" name="followUpDate" type="date" /></label>
+            <label>DM Sent
+              <select id="dmSent" name="dmSent">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="status" name="status">
+                <option value="New">New</option>
+                <option value="Replied">Replied</option>
+                <option value="Follow-up scheduled">Follow-up scheduled</option>
+                <option value="Converted to lead">Converted to lead</option>
+                <option value="Closed">Closed</option>
+              </select>
+            </label>
+            <label>Screenshot/Link Reference<input id="reference" name="reference" placeholder="https://... or screenshot filename" /></label>
+          </div>
+          <label>Question/Pain Point<textarea id="painPoint" name="painPoint" placeholder="What did they ask or struggle with?" required></textarea></label>
+          <label>My Public Reply<textarea id="publicReply" name="publicReply" placeholder="Paste your public comment reply"></textarea></label>
+          <label>Notes<textarea id="notes" name="notes" placeholder="Context, next steps, objections, reminders"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Conversation</button>
+            <button id="reset-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div id="conversation-list" class="card-grid empty-state"></div>
+      </section>
+    </main>
+
+    <template id="conversation-card-template">
+      <article class="card conversation-card">
+        <div class="card-topline">
+          <span class="platform badge"></span>
+          <span class="temperature badge"></span>
+        </div>
+        <h3 class="person"></h3>
+        <p class="group"></p>
+        <dl></dl>
+        <div class="card-actions">
+          <button class="convert primary" type="button">Convert to Lead</button>
+          <button class="edit secondary" type="button">Edit</button>
+          <button class="delete danger" type="button">Delete</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
