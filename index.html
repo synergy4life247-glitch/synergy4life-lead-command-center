@@ -24,6 +24,7 @@
       <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
+      <button class="tab" type="button" data-tab="communications">Communications</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
     </nav>
 
@@ -498,6 +499,55 @@
 
         <div id="overdue-task-list" class="card-grid overdue-task-list" aria-live="polite"></div>
         <div id="task-list" class="card-grid empty-state" aria-live="polite"></div>
+      </section>
+
+
+      <section id="communications" class="panel" aria-labelledby="communications-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Relationship command</p>
+            <h2 id="communications-heading">Communications</h2>
+          </div>
+          <span id="communication-count" class="count-pill">0 communications</span>
+        </div>
+
+        <div class="metrics-grid communication-metrics" aria-label="Communication dashboard metrics">
+          <article class="metric-card"><span>Total Communications</span><strong id="metric-communications-total">0</strong></article>
+          <article class="metric-card"><span>Calls Today</span><strong id="metric-communications-calls-today">0</strong></article>
+          <article class="metric-card overdue-metric"><span>Follow-Ups Due</span><strong id="metric-communications-followups">0</strong></article>
+          <article class="metric-card"><span>Appointments Set</span><strong id="metric-communications-appointments">0</strong></article>
+          <article class="metric-card"><span>Enrollments Closed</span><strong id="metric-communications-enrollments">0</strong></article>
+        </div>
+
+        <form id="communication-form" class="tracker-form">
+          <input type="hidden" id="communication-id" />
+          <div class="form-grid">
+            <label>Contact Name<input id="communicationContactName" name="communicationContactName" placeholder="Jane Smith" required /></label>
+            <label>Contact Type<select id="communicationContactType" name="communicationContactType"></select></label>
+            <label>Communication Type<select id="communicationType" name="communicationType"></select></label>
+            <label>Date/Time<input id="communicationDateTime" name="communicationDateTime" type="datetime-local" required /></label>
+            <label>Subject<input id="communicationSubject" name="communicationSubject" placeholder="Discovery call follow-up" required /></label>
+            <label>Outcome<select id="communicationOutcome" name="communicationOutcome"></select></label>
+            <label>Next Follow-Up Date<input id="communicationFollowUpDate" name="communicationFollowUpDate" type="date" /></label>
+          </div>
+          <label>Notes<textarea id="communicationNotes" name="communicationNotes" placeholder="Conversation details, objections, commitments, and next steps"></textarea></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Communication</button>
+            <button id="reset-communication-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div class="filter-panel communication-controls">
+          <label>Search Communications<input id="communication-search" placeholder="Search contact, subject, notes, outcome" /></label>
+          <div class="form-grid compact-grid">
+            <label>Filter by Contact Type<select id="communication-contact-filter"><option value="">All contact types</option></select></label>
+            <label>Filter by Communication Type<select id="communication-type-filter"><option value="">All communication types</option></select></label>
+            <label>Filter by Outcome<select id="communication-outcome-filter"><option value="">All outcomes</option></select></label>
+            <label>Filter by Date<input id="communication-date-filter" type="date" /></label>
+          </div>
+        </div>
+
+        <div id="communication-list" class="communication-timeline empty-state" aria-live="polite"></div>
       </section>
 
       <section id="group-conversations" class="panel" aria-labelledby="group-conversations-heading">
