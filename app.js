@@ -11,6 +11,7 @@ const DASHBOARD_KEY = 'synergy4life.dashboard';
 const DOCUMENTS_KEY = 'synergy4life.documents';
 const COMMUNICATIONS_KEY = 'synergy4life.communications';
 const REVENUE_CENTER_KEY = 'synergy4life.revenueCenter';
+const TEAM_KEY = 'synergy4life.teamMembers';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -65,6 +66,10 @@ const revenueTypeOptions = ['Credit Repair Enrollment', 'Monthly Program Payment
 const expenseCategoryOptions = ['Marketing', 'Software', 'VA Payroll', 'Office Expense', 'Business Travel', 'Education', 'Advertising', 'Other'];
 const incomeFields = ['incomeDate', 'incomeClientName', 'incomeRevenueType', 'incomeAmount', 'incomePaymentMethod', 'incomeNotes'];
 const expenseFields = ['expenseDate', 'expenseCategory', 'expenseAmount', 'expenseVendor', 'expenseNotes'];
+const teamRoleOptions = ['Virtual Assistant', 'Dispute Processor', 'Sales Representative', 'Moderator', 'Admin', 'Realtor Partner', 'Backend Processor', 'Mentor', 'Other'];
+const teamStatusOptions = ['Active', 'Inactive', 'Training', 'On Leave'];
+const teamPayTypeOptions = ['Hourly', 'Salary', 'Per File', 'Commission', 'Contractor'];
+const teamFields = ['teamFullName', 'teamRole', 'teamEmail', 'teamPhone', 'teamStartDate', 'teamStatus', 'teamPayType', 'teamPayRate', 'teamNotes', 'teamFilesCompleted', 'teamLeadsContacted', 'teamSalesClosed', 'teamTasksCompleted', 'teamLastActivityDate'];
 
 const form = document.querySelector('#conversation-form');
 const conversationList = document.querySelector('#conversation-list');
@@ -135,6 +140,13 @@ const revenueKindFilter = document.querySelector('#revenue-kind-filter');
 const revenueCategoryFilter = document.querySelector('#revenue-category-filter');
 const revenueStartFilter = document.querySelector('#revenue-start-filter');
 const revenueEndFilter = document.querySelector('#revenue-end-filter');
+const teamForm = document.querySelector('#team-form');
+const teamList = document.querySelector('#team-list');
+const teamCount = document.querySelector('#team-count');
+const teamSearch = document.querySelector('#team-search');
+const teamRoleFilter = document.querySelector('#team-role-filter');
+const teamStatusFilter = document.querySelector('#team-status-filter');
+const teamRankings = document.querySelector('#team-rankings');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -169,6 +181,112 @@ function seedSelect(select, values, allLabel = '') {
 
 
 
+
+function getTeamMembers() {
+  const members = readStore(TEAM_KEY);
+  return Array.isArray(members) ? members : [];
+}
+
+function getTeamFormData() {
+  return teamFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function resetTeamForm() {
+  teamForm.reset();
+  document.querySelector('#team-id').value = '';
+  document.querySelector('#teamRole').value = 'Virtual Assistant';
+  document.querySelector('#teamStatus').value = 'Active';
+  document.querySelector('#teamPayType').value = 'Hourly';
+  document.querySelector('#teamLastActivityDate').value = todayDateString();
+}
+
+function saveTeamMember(event) {
+  event.preventDefault();
+  const members = getTeamMembers();
+  const id = document.querySelector('#team-id').value || crypto.randomUUID();
+  const existing = members.findIndex((member) => member.id === id);
+  const record = { id, ...getTeamFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? members[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) members[existing] = record;
+  else members.unshift(record);
+  writeStore(TEAM_KEY, members);
+  resetTeamForm();
+  render();
+}
+
+function editTeamMember(id) {
+  const member = getTeamMembers().find((item) => item.id === id);
+  if (!member) return;
+  document.querySelector('#team-id').value = member.id;
+  teamFields.forEach((field) => { document.querySelector(`#${field}`).value = member[field] || ''; });
+  document.querySelector('[data-tab="team"]').click();
+  teamForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteTeamMember(id) {
+  writeStore(TEAM_KEY, getTeamMembers().filter((member) => member.id !== id));
+  render();
+}
+
+function teamProductivityScore(member) {
+  return asNumber(member.teamFilesCompleted) * 3
+    + asNumber(member.teamSalesClosed) * 5
+    + asNumber(member.teamTasksCompleted) * 2
+    + asNumber(member.teamLeadsContacted);
+}
+
+function renderTeamMetrics(members) {
+  document.querySelector('#metric-team-total').textContent = members.length;
+  document.querySelector('#metric-team-active').textContent = members.filter((member) => member.teamStatus === 'Active').length;
+  document.querySelector('#metric-team-files').textContent = members.reduce((sum, member) => sum + asNumber(member.teamFilesCompleted), 0);
+  document.querySelector('#metric-team-sales').textContent = members.reduce((sum, member) => sum + asNumber(member.teamSalesClosed), 0);
+  document.querySelector('#metric-team-productivity').textContent = members.reduce((sum, member) => sum + teamProductivityScore(member), 0);
+}
+
+function getFilteredTeamMembers(members) {
+  const query = teamSearch.value.trim().toLowerCase();
+  return members.filter((member) => {
+    const searchable = [member.teamFullName, member.teamRole, member.teamEmail, member.teamPhone, member.teamStatus, member.teamPayType, member.teamNotes].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!teamRoleFilter.value || member.teamRole === teamRoleFilter.value)
+      && (!teamStatusFilter.value || member.teamStatus === teamStatusFilter.value);
+  });
+}
+
+function renderTeamRankings(members) {
+  const ranked = [...members].sort((a, b) => teamProductivityScore(b) - teamProductivityScore(a)).slice(0, 5);
+  teamRankings.innerHTML = ranked.length ? ranked.map((member, index) => `
+    <article class="chart-row team-ranking-row">
+      <span>#${index + 1} ${escapeHtml(member.teamFullName || 'Unnamed team member')} • ${escapeHtml(member.teamRole || 'Role')}</span>
+      <strong>${teamProductivityScore(member)}</strong>
+    </article>`).join('') : '<p class="empty-message">No productivity rankings yet. Add team activity to see leaders.</p>';
+}
+
+function renderTeamCard(member) {
+  const card = document.createElement('article');
+  card.className = 'card team-card';
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(member.teamRole || 'Role')}</span><span class="badge ${member.teamStatus === 'Active' ? 'success-badge' : ''}">${escapeHtml(member.teamStatus || 'Status')}</span><span class="badge">Score: ${teamProductivityScore(member)}</span></div>
+    <h3>${escapeHtml(member.teamFullName || 'Unnamed team member')}</h3>
+    <p class="group">${escapeHtml(member.teamEmail || 'No email')} • ${escapeHtml(member.teamPhone || 'No phone')}</p>
+    <dl>
+      ${detail('Start Date', formatDate(member.teamStartDate))}
+      ${detail('Pay', `${member.teamPayType || 'Not set'}${member.teamPayRate ? ` • ${formatCurrency(member.teamPayRate)}` : ''}`)}
+      ${detail('Files Completed', member.teamFilesCompleted)}
+      ${detail('Leads Contacted', member.teamLeadsContacted)}
+      ${detail('Sales Closed', member.teamSalesClosed)}
+      ${detail('Tasks Completed', member.teamTasksCompleted)}
+      ${detail('Last Activity Date', formatDate(member.teamLastActivityDate))}
+      ${detail('Activity Tracking', member.teamLastActivityDate ? `${daysUntil(member.teamLastActivityDate) !== null ? Math.abs(daysUntil(member.teamLastActivityDate)) : 0} day(s) since last activity` : 'No activity date logged')}
+      ${detail('Notes', member.teamNotes)}
+    </dl>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editTeamMember(member.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteTeamMember(member.id));
+  return card;
+}
 
 function getRevenueRecords() {
   const records = readStore(REVENUE_CENTER_KEY);
@@ -1506,7 +1624,7 @@ function renderLeadCard(lead) {
 }
 
 
-function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords }) {
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers = [] }) {
   const totalLeadCount = leads.length + pipelineLeads.length;
   const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
@@ -1546,16 +1664,18 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
     documents: [ ['Total Documents', documents.length], ['Pending Review', documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length], ['Uploaded Today', documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length], ['Document Clients', new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean)).size] ],
     communications: [ ['Total Communications', communications.length], ['Calls Today', communications.filter((item) => item.communicationType === 'Call' && (item.communicationDateTime || '').slice(0, 10) === todayDateString()).length], ['Follow-Ups Due', communications.filter((item) => isFollowUpDue(item.communicationFollowUpDate)).length], ['Appointments Set', communications.filter((item) => item.communicationOutcome === 'Appointment Set').length] ],
     financial: [ ['Total Revenue', formatCurrency(revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue)], ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Total Expenses', formatCurrency(revenueCenterTotalExpenses)], ['Net Profit', formatCurrency((revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue) - revenueCenterTotalExpenses)] ],
+    team: [ ['Total Team Members', teamMembers.length], ['Active Team Members', teamMembers.filter((member) => member.teamStatus === 'Active').length], ['Team Productivity Score', teamMembers.reduce((sum, member) => sum + teamProductivityScore(member), 0)] ],
   };
 }
 
-function collectActivity({ leads, clients, pipelineLeads, creditFiles, tasks }) {
+function collectActivity({ leads, clients, pipelineLeads, creditFiles, tasks, teamMembers = [] }) {
   return [
     ...leads.map((lead) => ({ type: 'New lead added', title: lead.name || 'Unnamed lead', detail: lead.source || 'Converted lead', date: lead.createdAt })),
     ...pipelineLeads.map((lead) => ({ type: lead.updatedAt && lead.updatedAt !== lead.createdAt ? 'Lead moved in pipeline' : 'New lead added', title: lead.pipelineName || 'Unnamed lead', detail: lead.pipelineStage || 'New Lead', date: lead.updatedAt || lead.createdAt })),
     ...clients.map((client) => ({ type: 'Client added', title: client.fullName || 'Unnamed client', detail: client.clientGoal || 'Client record', date: client.createdAt })),
     ...creditFiles.map((file) => ({ type: 'Credit file updated', title: file.creditClientName || 'Unnamed client', detail: file.creditStatus || 'Credit file', date: file.updatedAt || file.createdAt })),
     ...tasks.filter((task) => task.taskStatus === 'Completed').map((task) => ({ type: 'Task completed', title: task.taskTitle || 'Task', detail: task.taskPerson || task.taskSource || 'Follow-up center', date: task.updatedAt || task.createdAt })),
+    ...teamMembers.map((member) => ({ type: 'Team activity logged', title: member.teamFullName || 'Team member', detail: `${member.teamRole || 'Role'} • ${teamProductivityScore(member)} productivity points`, date: member.teamLastActivityDate || member.updatedAt || member.createdAt })),
   ].filter((item) => item.date).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
 }
 
@@ -1563,7 +1683,7 @@ function renderDashboard(data) {
   const metrics = calculateDashboardMetrics(data);
   const groups = [
     ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks],
-    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['COMMUNICATIONS', metrics.communications], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
+    ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['COMMUNICATIONS', metrics.communications], ['TEAM', metrics.team], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
   ];
   dashboardSections.innerHTML = groups.map(([title, items]) => `
     <section class="dashboard-widget ${title === 'PIPELINE' || title === 'FINANCIAL METRICS' ? 'wide-widget' : ''}">
@@ -1589,6 +1709,7 @@ function render() {
   const documents = readStore(DOCUMENTS_KEY);
   const communications = readStore(COMMUNICATIONS_KEY);
   const revenueRecords = getRevenueRecords();
+  const teamMembers = getTeamMembers();
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1600,6 +1721,7 @@ function render() {
   documentCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
   communicationCount.textContent = `${communications.length} communication${communications.length === 1 ? '' : 's'}`;
   revenueTransactionCount.textContent = `${revenueRecords.length} transaction${revenueRecords.length === 1 ? '' : 's'}`;
+  teamCount.textContent = `${teamMembers.length} team member${teamMembers.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1613,7 +1735,9 @@ function render() {
   renderCommunicationMetrics(communications);
   updateRevenueCategoryFilter();
   renderRevenueMetrics(revenueRecords);
-  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords });
+  renderTeamMetrics(teamMembers);
+  renderTeamRankings(teamMembers);
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -1625,6 +1749,7 @@ function render() {
   documentList.innerHTML = '';
   communicationList.innerHTML = '';
   revenueTransactionList.innerHTML = '';
+  teamList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -1650,6 +1775,10 @@ function render() {
   const filteredCommunications = getFilteredCommunications(communications);
   if (!filteredCommunications.length) communicationList.innerHTML = '<p class="empty-message">No communications match your current view. Add a conversation or adjust your filters.</p>';
   filteredCommunications.forEach((item) => communicationList.append(renderCommunicationCard(item)));
+
+  const filteredTeamMembers = getFilteredTeamMembers(teamMembers);
+  if (!filteredTeamMembers.length) teamList.innerHTML = '<p class="empty-message">No team members match your current view. Add a team member or adjust your filters.</p>';
+  filteredTeamMembers.forEach((member) => teamList.append(renderTeamCard(member)));
 
   const filteredRevenueRecords = getFilteredRevenueRecords(revenueRecords);
   if (!filteredRevenueRecords.length) revenueTransactionList.innerHTML = '<p class="empty-message">No revenue center transactions match your current view. Add income or expenses above.</p>';
@@ -1710,6 +1839,11 @@ seedSelect(communicationOutcomeFilter, communicationOutcomes, 'All outcomes');
 seedSelect(document.querySelector('#incomeRevenueType'), revenueTypeOptions);
 seedSelect(document.querySelector('#expenseCategory'), expenseCategoryOptions);
 seedSelect(revenueCategoryFilter, [...revenueTypeOptions, ...expenseCategoryOptions], 'All categories');
+seedSelect(document.querySelector('#teamRole'), teamRoleOptions);
+seedSelect(document.querySelector('#teamStatus'), teamStatusOptions);
+seedSelect(document.querySelector('#teamPayType'), teamPayTypeOptions);
+seedSelect(teamRoleFilter, teamRoleOptions, 'All roles');
+seedSelect(teamStatusFilter, teamStatusOptions, 'All statuses');
 
 form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
@@ -1722,6 +1856,7 @@ documentForm.addEventListener('submit', saveDocument);
 communicationForm.addEventListener('submit', saveCommunication);
 incomeForm.addEventListener('submit', saveIncome);
 expenseForm.addEventListener('submit', saveExpense);
+teamForm.addEventListener('submit', saveTeamMember);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
@@ -1732,6 +1867,7 @@ document.querySelector('#reset-document-form').addEventListener('click', resetDo
 document.querySelector('#reset-communication-form').addEventListener('click', resetCommunicationForm);
 document.querySelector('#reset-income-form').addEventListener('click', resetIncomeForm);
 document.querySelector('#reset-expense-form').addEventListener('click', resetExpenseForm);
+document.querySelector('#reset-team-form').addEventListener('click', resetTeamForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -1753,6 +1889,8 @@ communicationSearch.addEventListener('input', render);
 communicationDateFilter.addEventListener('change', render);
 revenueSearch.addEventListener('input', render);
 [revenueKindFilter, revenueCategoryFilter, revenueStartFilter, revenueEndFilter].forEach((control) => control.addEventListener('change', render));
+teamSearch.addEventListener('input', render);
+[teamRoleFilter, teamStatusFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
@@ -1763,4 +1901,5 @@ resetDocumentForm();
 resetCommunicationForm();
 resetIncomeForm();
 resetExpenseForm();
+resetTeamForm();
 render();
