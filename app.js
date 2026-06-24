@@ -6,6 +6,7 @@ const PIPELINE_DELETED_KEY = 'synergy4life.pipeline.deletedSourceLeads';
 const CREDIT_FILES_KEY = 'synergy4life.creditFiles';
 const TASKS_KEY = 'synergy4life.tasks';
 const MORTGAGE_READINESS_KEY = 'synergy4life.mortgageReadiness';
+const CREDIT_INTELLIGENCE_KEY = 'synergy4life.creditIntelligence';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -29,6 +30,12 @@ const creditFileFields = [
   'creditTargetScore', 'creditEnrollmentDate', 'creditStatus', 'disputeStage', 'creditFollowUpDate',
   'creditMortgageReady', 'negativeAccounts', 'inquiries', 'latePayments', 'collections',
   'chargeOffs', 'repossessions', 'bankruptcy', 'disputeRoundNotes'
+];
+const creditIntelligenceFields = [
+  'ciClientName', 'ciGoalType', 'ciEquifaxScore', 'ciExperianScore', 'ciTransUnionScore',
+  'ciOpenRevolving', 'ciOpenInstallment', 'ciAutoLoanPresent', 'ciMortgageHistoryPresent',
+  'ciAuthorizedUserPresent', 'ciAverageAge', 'ciUtilization', 'ciTotalInquiries',
+  'ciRecentLatePayments', 'ciCollectionCount', 'ciChargeOffCount', 'ciRepoCount', 'ciBankruptcyPresent'
 ];
 const pipelineFields = ['pipelineName', 'pipelinePhone', 'pipelineEmail', 'pipelineSource', 'pipelineStage', 'pipelineValue', 'pipelineNotes'];
 const mortgageLoanTypes = ['FHA', 'VA', 'USDA', 'Conventional'];
@@ -70,6 +77,10 @@ const creditGoalFilter = document.querySelector('#credit-goal-filter');
 const creditStatusFilter = document.querySelector('#credit-status-filter');
 const creditStageFilter = document.querySelector('#credit-stage-filter');
 const creditMortgageFilter = document.querySelector('#credit-mortgage-filter');
+const creditIntelligenceForm = document.querySelector('#credit-intelligence-form');
+const creditIntelligenceList = document.querySelector('#credit-intelligence-list');
+const creditIntelligenceCount = document.querySelector('#credit-intelligence-count');
+const creditIntelligencePreview = document.querySelector('#credit-intelligence-preview');
 const mortgageReadinessForm = document.querySelector('#mortgage-readiness-form');
 const mortgageReadinessList = document.querySelector('#mortgage-readiness-list');
 const mortgageReadinessCount = document.querySelector('#mortgage-readiness-count');
@@ -104,6 +115,187 @@ function seedSelect(select, values, allLabel = '') {
 }
 
 
+
+
+function getCreditIntelligenceFormData() {
+  return creditIntelligenceFields.reduce((data, field) => {
+    data[field] = document.querySelector(`#${field}`).value.trim();
+    return data;
+  }, {});
+}
+
+function scoreCategory(score) {
+  if (score >= 85) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 55) return 'Fair';
+  if (score >= 35) return 'Poor';
+  return 'Critical';
+}
+
+function calculateCreditIntelligence(input = {}) {
+  const scores = [input.ciEquifaxScore, input.ciExperianScore, input.ciTransUnionScore].map(asNumber).filter(Boolean);
+  const averageScore = Math.round(average(scores));
+  const revolving = asNumber(input.ciOpenRevolving);
+  const installment = asNumber(input.ciOpenInstallment);
+  const totalAccounts = revolving + installment;
+  const age = asNumber(input.ciAverageAge);
+  const utilization = asNumber(input.ciUtilization);
+  const inquiries = asNumber(input.ciTotalInquiries);
+  const latePayments = asNumber(input.ciRecentLatePayments);
+  const collections = asNumber(input.ciCollectionCount);
+  const chargeOffs = asNumber(input.ciChargeOffCount);
+  const repos = asNumber(input.ciRepoCount);
+  const bankruptcy = input.ciBankruptcyPresent === 'Yes';
+  const autoPresent = input.ciAutoLoanPresent === 'Yes';
+  const mortgagePresent = input.ciMortgageHistoryPresent === 'Yes';
+  const auPresent = input.ciAuthorizedUserPresent === 'Yes';
+  const thinFile = totalAccounts < 3 || age < 2 || scores.length < 3;
+  const missingRevolving = revolving === 0;
+  const missingInstallment = installment === 0;
+  const creditMixDeficient = missingRevolving || missingInstallment || (!autoPresent && ['Auto Loan', 'Home Purchase'].includes(input.ciGoalType));
+  const highUtilization = utilization > 30;
+  const tooManyInquiries = inquiries > 5;
+  const recentLateWarning = latePayments > 0;
+  const freezeIndicator = scores.length < 3 || averageScore < 350;
+
+  let readinessScore = 40;
+  readinessScore += averageScore ? Math.min(30, Math.max(0, (averageScore - 520) / 11)) : -8;
+  readinessScore += !thinFile ? 10 : -10;
+  readinessScore += !creditMixDeficient ? 8 : -6;
+  readinessScore += utilization <= 9 ? 14 : utilization <= 30 ? 8 : utilization <= 50 ? 1 : -12;
+  readinessScore += inquiries <= 2 ? 6 : inquiries <= 5 ? 2 : -8;
+  readinessScore -= latePayments * 6;
+  readinessScore -= collections * 5;
+  readinessScore -= chargeOffs * 6;
+  readinessScore -= repos * 7;
+  readinessScore -= bankruptcy ? 12 : 0;
+  readinessScore += age >= 5 ? 5 : age >= 2 ? 2 : 0;
+  if (input.ciGoalType === 'Home Purchase' && mortgagePresent && latePayments === 0 && utilization <= 30) readinessScore += 5;
+  if (input.ciGoalType === 'Business Funding' && revolving >= 3 && utilization <= 15 && inquiries <= 3) readinessScore += 5;
+  readinessScore = Math.max(0, Math.min(100, Math.round(readinessScore)));
+
+  const flags = {
+    thinFile, creditMixDeficient, missingRevolving, missingInstallment,
+    missingAutoHistory: !autoPresent, missingMortgageHistory: !mortgagePresent,
+    highUtilization, tooManyInquiries, recentLateWarning, freezeIndicator,
+  };
+  const disputes = [];
+  if (collections) disputes.push('Validate collection accounts and dispute inaccurate, unverifiable, duplicate, or outdated reporting.');
+  if (chargeOffs) disputes.push('Audit charge offs for balance, date, ownership, and bureau-level reporting inconsistencies.');
+  if (repos) disputes.push('Review repossessions for notices, deficiency balance accuracy, and bureau inconsistencies.');
+  if (latePayments) disputes.push('Target recent late payments with goodwill, factual disputes, and payment-history documentation.');
+  if (bankruptcy) disputes.push('Verify bankruptcy public record data and every included account for accurate status and dates.');
+  if (tooManyInquiries) disputes.push('Dispute unauthorized or non-permissible inquiries; avoid new applications during the repair window.');
+  if (!disputes.length) disputes.push('No major negative categories entered; focus disputes only on inaccurate or unverifiable items.');
+
+  const positiveAccounts = [];
+  if (missingRevolving) positiveAccounts.push('Add 1-2 low-fee revolving accounts or secured cards reporting to all three bureaus.');
+  else if (revolving < 3) positiveAccounts.push('Add one additional revolving tradeline after utilization is controlled.');
+  if (missingInstallment) positiveAccounts.push('Add a small credit-builder installment loan if it fits the client budget.');
+  if (!autoPresent && input.ciGoalType === 'Auto Loan') positiveAccounts.push('Build installment strength before applying for auto financing.');
+  if (!mortgagePresent && input.ciGoalType === 'Home Purchase') positiveAccounts.push('Compensate for no mortgage history with clean rent verification, low utilization, and stable tradelines.');
+  if (!auPresent && thinFile) positiveAccounts.push('Consider a seasoned authorized-user account with perfect payment history and low utilization.');
+  if (!positiveAccounts.length) positiveAccounts.push('Maintain existing positive accounts; do not add unnecessary new debt before the goal.');
+
+  const recommendations = [
+    `Utilization: ${highUtilization ? 'pay revolving balances below 30% immediately, then target 1-9% for scoring optimization.' : 'keep reported balances between 1-9% and avoid maxed-out cards.'}`,
+    `Inquiry strategy: ${tooManyInquiries ? 'pause applications for 60-90 days and challenge unauthorized inquiries.' : 'batch rate-shopping only when necessary and avoid unnecessary hard pulls.'}`,
+    `Mortgage readiness: ${input.ciGoalType === 'Home Purchase' ? (readinessScore >= 75 && utilization <= 30 && !recentLateWarning ? 'profile is approaching lender-ready; verify DTI, reserves, and documentation.' : 'prioritize no new lates, utilization under 10%, clean collections, and stable tradelines.') : 'keep mortgage standards in mind if home buying becomes a future goal.'}`,
+    `Funding readiness: ${input.ciGoalType === 'Business Funding' ? (readinessScore >= 75 ? 'stronger funding posture; keep inquiries low and utilization under 15%.' : 'build 3+ revolving accounts, low utilization, and a cleaner inquiry profile before funding applications.') : 'for future funding, preserve low utilization and avoid excessive inquiries.'}`,
+  ];
+  const timeline = readinessScore >= 85 ? '0-30 days' : readinessScore >= 70 ? '30-60 days' : readinessScore >= 55 ? '60-90 days' : readinessScore >= 35 ? '90-180 days' : '180+ days';
+  return { averageScore, totalAccounts, readinessScore, status: scoreCategory(readinessScore), flags, disputes, positiveAccounts, recommendations, timeline };
+}
+
+function normalizeCreditIntelligence(record) {
+  return { ...record, calculated: calculateCreditIntelligence(record) };
+}
+
+function resetCreditIntelligenceForm() {
+  creditIntelligenceForm.reset();
+  document.querySelector('#credit-intelligence-id').value = '';
+  document.querySelector('#ciGoalType').value = 'Home Purchase';
+  ['ciAutoLoanPresent', 'ciMortgageHistoryPresent', 'ciAuthorizedUserPresent', 'ciBankruptcyPresent'].forEach((field) => document.querySelector(`#${field}`).value = 'No');
+  updateCreditIntelligencePreview();
+}
+
+function saveCreditIntelligence(event) {
+  event.preventDefault();
+  const reports = readStore(CREDIT_INTELLIGENCE_KEY);
+  const id = document.querySelector('#credit-intelligence-id').value || crypto.randomUUID();
+  const existing = reports.findIndex((report) => report.id === id);
+  const record = { id, ...getCreditIntelligenceFormData(), updatedAt: new Date().toISOString(), createdAt: existing >= 0 ? reports[existing].createdAt : new Date().toISOString() };
+  if (existing >= 0) reports[existing] = record;
+  else reports.unshift(record);
+  writeStore(CREDIT_INTELLIGENCE_KEY, reports);
+  resetCreditIntelligenceForm();
+  render();
+}
+
+function editCreditIntelligence(id) {
+  const report = readStore(CREDIT_INTELLIGENCE_KEY).find((item) => item.id === id);
+  if (!report) return;
+  document.querySelector('#credit-intelligence-id').value = report.id;
+  creditIntelligenceFields.forEach((field) => document.querySelector(`#${field}`).value = report[field] || '');
+  updateCreditIntelligencePreview();
+  document.querySelector('[data-tab="credit-intelligence"]').click();
+  creditIntelligenceForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteCreditIntelligence(id) {
+  writeStore(CREDIT_INTELLIGENCE_KEY, readStore(CREDIT_INTELLIGENCE_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function renderCreditIntelligenceMetrics(reports) {
+  const calculated = reports.map(normalizeCreditIntelligence);
+  document.querySelector('#metric-ci-average').textContent = Math.round(average(calculated.map((item) => item.calculated.readinessScore)));
+  document.querySelector('#metric-ci-thin').textContent = calculated.filter((item) => item.calculated.flags.thinFile).length;
+  document.querySelector('#metric-ci-mortgage-ready').textContent = calculated.filter((item) => item.ciGoalType === 'Home Purchase' && item.calculated.readinessScore >= 75 && !item.calculated.flags.recentLateWarning && !item.calculated.flags.highUtilization).length;
+  document.querySelector('#metric-ci-high-risk').textContent = calculated.filter((item) => item.calculated.status === 'Poor' || item.calculated.status === 'Critical').length;
+}
+
+function intelligenceList(title, items) {
+  return `<div class="intelligence-section"><h4>${escapeHtml(title)}</h4><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
+}
+
+function renderCreditIntelligenceCard(item) {
+  const report = normalizeCreditIntelligence(item);
+  const calc = report.calculated;
+  const activeFlags = Object.entries(calc.flags).filter(([, value]) => value).map(([key]) => key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()));
+  const card = document.createElement('article');
+  card.className = `card credit-intelligence-card status-${calc.status.toLowerCase()}`;
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(report.ciGoalType || 'Goal')}</span><span class="badge">${calc.status}</span><span class="badge">${calc.readinessScore}/100</span></div>
+    <h3>${escapeHtml(report.ciClientName || 'Unnamed client')}</h3>
+    <div class="readiness-meter"><span style="width:${calc.readinessScore}%"></span></div>
+    <p class="group">Average score: ${calc.averageScore || '—'} • Accounts: ${calc.totalAccounts} • Timeline: ${escapeHtml(calc.timeline)}</p>
+    <dl>
+      ${detail('Current Scores (EQ / EX / TU)', `${report.ciEquifaxScore || '—'} / ${report.ciExperianScore || '—'} / ${report.ciTransUnionScore || '—'}`)}
+      ${detail('Detected Analysis Flags', activeFlags.length ? activeFlags.join('\n') : 'No major structural deficiencies detected')}
+      ${detail('Estimated Timeline to Goal', calc.timeline)}
+    </dl>
+    <div class="intelligence-report">
+      ${intelligenceList('What should be disputed', calc.disputes)}
+      ${intelligenceList('Positive accounts to add', calc.positiveAccounts)}
+      ${intelligenceList('Strategic recommendations', calc.recommendations)}
+    </div>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editCreditIntelligence(report.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteCreditIntelligence(report.id));
+  return card;
+}
+
+function updateCreditIntelligencePreview() {
+  if (!creditIntelligencePreview) return;
+  const calc = calculateCreditIntelligence(getCreditIntelligenceFormData());
+  creditIntelligencePreview.innerHTML = `
+    <article class="preview-card"><span>Readiness Score</span><strong>${calc.readinessScore}/100</strong><div class="readiness-meter"><span style="width:${calc.readinessScore}%"></span></div></article>
+    <article class="preview-card"><span>Status</span><strong>${calc.status}</strong></article>
+    <article class="preview-card"><span>Thin File</span><strong>${calc.flags.thinFile ? 'Yes' : 'No'}</strong></article>
+    <article class="preview-card"><span>Timeline</span><strong>${escapeHtml(calc.timeline)}</strong></article>
+    <article class="preview-card recommendations"><span>Dynamic Intelligence Report</span><p>${escapeHtml([...calc.disputes, ...calc.positiveAccounts, ...calc.recommendations].join(' • '))}</p></article>`;
+}
 
 function getMortgageReadinessFormData() {
   return mortgageReadinessFields.reduce((data, field) => {
@@ -298,7 +490,6 @@ function resetTaskForm() {
 function saveTask(event) {
   event.preventDefault();
   const tasks = getTasks();
-  const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
   const id = document.querySelector('#task-id').value || crypto.randomUUID();
   const existing = tasks.findIndex((task) => task.id === id);
   const record = normalizeTask({
@@ -899,27 +1090,34 @@ function render() {
   const creditFiles = readStore(CREDIT_FILES_KEY);
   const tasks = getTasks();
   const mortgageReadiness = readStore(MORTGAGE_READINESS_KEY);
+  const creditIntelligence = readStore(CREDIT_INTELLIGENCE_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
   pipelineCount.textContent = `${pipelineLeads.length} lead${pipelineLeads.length === 1 ? '' : 's'}`;
   creditFileCount.textContent = `${creditFiles.length} file${creditFiles.length === 1 ? '' : 's'}`;
   taskCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
+  creditIntelligenceCount.textContent = `${creditIntelligence.length} report${creditIntelligence.length === 1 ? '' : 's'}`;
   mortgageReadinessCount.textContent = `${mortgageReadiness.length} evaluation${mortgageReadiness.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
   renderCreditFileMetrics(creditFiles);
   renderTaskMetrics(tasks);
+  renderCreditIntelligenceMetrics(creditIntelligence);
   renderMortgageMetrics(mortgageReadiness);
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
   creditFileList.innerHTML = '';
   taskList.innerHTML = '';
+  creditIntelligenceList.innerHTML = '';
   mortgageReadinessList.innerHTML = '';
   overdueTaskList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
+
+  if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
+  creditIntelligence.forEach((item) => creditIntelligenceList.append(renderCreditIntelligenceCard(item)));
 
   if (!mortgageReadiness.length) mortgageReadinessList.innerHTML = '<p class="empty-message">No mortgage readiness evaluations yet. Add a client assessment above.</p>';
   mortgageReadiness.forEach((item) => mortgageReadinessList.append(renderMortgageReadinessCard(item)));
@@ -974,14 +1172,21 @@ form.addEventListener('submit', saveConversation);
 clientForm.addEventListener('submit', saveClient);
 pipelineForm.addEventListener('submit', savePipelineLead);
 creditFileForm.addEventListener('submit', saveCreditFile);
+creditIntelligenceForm.addEventListener('submit', saveCreditIntelligence);
 mortgageReadinessForm.addEventListener('submit', saveMortgageReadiness);
 taskForm.addEventListener('submit', saveTask);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
 document.querySelector('#reset-credit-file-form').addEventListener('click', resetCreditFileForm);
+document.querySelector('#reset-credit-intelligence-form').addEventListener('click', resetCreditIntelligenceForm);
 document.querySelector('#reset-task-form').addEventListener('click', resetTaskForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
+creditIntelligenceFields.forEach((field) => {
+  const control = document.querySelector(`#${field}`);
+  control.addEventListener('input', updateCreditIntelligencePreview);
+  control.addEventListener('change', updateCreditIntelligencePreview);
+});
 mortgageReadinessFields.forEach((field) => document.querySelector(`#${field}`).addEventListener('input', updateMortgageReadinessPreview));
 document.querySelector('#desiredLoanType').addEventListener('change', updateMortgageReadinessPreview);
 document.querySelector('#bankruptcyHistory').addEventListener('change', updateMortgageReadinessPreview);
@@ -995,4 +1200,5 @@ taskSearch.addEventListener('input', render);
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [goalFilter, paymentFilter, teamFilter].forEach((control) => control.addEventListener('change', render));
+updateCreditIntelligencePreview();
 render();

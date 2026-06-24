@@ -19,6 +19,7 @@
       <button class="tab" type="button" data-tab="pipeline">Pipeline</button>
       <button class="tab" type="button" data-tab="clients">Clients</button>
       <button class="tab" type="button" data-tab="credit-files">Credit Files</button>
+      <button class="tab" type="button" data-tab="credit-intelligence">Credit Intelligence</button>
       <button class="tab" type="button" data-tab="mortgage-ready">Mortgage Ready</button>
       <button class="tab" type="button" data-tab="tasks">Tasks</button>
       <button class="tab" type="button" data-tab="group-conversations">Group Conversations</button>
@@ -246,6 +247,70 @@
         </div>
 
         <div id="credit-file-list" class="card-grid empty-state"></div>
+      </section>
+
+
+      <section id="credit-intelligence" class="panel" aria-labelledby="credit-intelligence-heading">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Credit File Intelligence Engine</p>
+            <h2 id="credit-intelligence-heading">Credit Intelligence</h2>
+          </div>
+          <span id="credit-intelligence-count" class="count-pill">0 reports</span>
+        </div>
+
+        <div class="metrics-grid credit-intelligence-metrics" aria-label="Credit intelligence dashboard metrics">
+          <article class="metric-card"><span>Average Readiness Score</span><strong id="metric-ci-average">0</strong></article>
+          <article class="metric-card"><span>Thin Files</span><strong id="metric-ci-thin">0</strong></article>
+          <article class="metric-card"><span>Mortgage Ready Profiles</span><strong id="metric-ci-mortgage-ready">0</strong></article>
+          <article class="metric-card"><span>High Risk Profiles</span><strong id="metric-ci-high-risk">0</strong></article>
+        </div>
+
+        <form id="credit-intelligence-form" class="tracker-form credit-intelligence-form">
+          <input type="hidden" id="credit-intelligence-id" />
+          <div class="form-group-title">Client Information</div>
+          <div class="form-grid">
+            <label>Client Name<input id="ciClientName" name="ciClientName" placeholder="Jane Smith" required /></label>
+            <label>Goal Type
+              <select id="ciGoalType" name="ciGoalType">
+                <option value="Home Purchase">Home Purchase</option>
+                <option value="Auto Loan">Auto Loan</option>
+                <option value="Business Funding">Business Funding</option>
+                <option value="Credit Cards">Credit Cards</option>
+                <option value="Personal Loan">Personal Loan</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-group-title">Credit Profile Inputs</div>
+          <div class="form-grid">
+            <label>Equifax Score<input id="ciEquifaxScore" name="ciEquifaxScore" type="number" min="300" max="850" placeholder="640" /></label>
+            <label>Experian Score<input id="ciExperianScore" name="ciExperianScore" type="number" min="300" max="850" placeholder="650" /></label>
+            <label>TransUnion Score<input id="ciTransUnionScore" name="ciTransUnionScore" type="number" min="300" max="850" placeholder="645" /></label>
+            <label>Open Revolving Accounts<input id="ciOpenRevolving" name="ciOpenRevolving" type="number" min="0" step="1" placeholder="2" /></label>
+            <label>Open Installment Accounts<input id="ciOpenInstallment" name="ciOpenInstallment" type="number" min="0" step="1" placeholder="1" /></label>
+            <label>Auto Loan Present<select id="ciAutoLoanPresent" name="ciAutoLoanPresent"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Mortgage History Present<select id="ciMortgageHistoryPresent" name="ciMortgageHistoryPresent"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Authorized User Accounts Present<select id="ciAuthorizedUserPresent" name="ciAuthorizedUserPresent"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+            <label>Average Age of Accounts<input id="ciAverageAge" name="ciAverageAge" type="number" min="0" step="0.1" placeholder="2.5" /></label>
+            <label>Utilization Percentage<input id="ciUtilization" name="ciUtilization" type="number" min="0" max="200" step="1" placeholder="34" /></label>
+            <label>Total Inquiries<input id="ciTotalInquiries" name="ciTotalInquiries" type="number" min="0" step="1" placeholder="4" /></label>
+            <label>Recent Late Payments<input id="ciRecentLatePayments" name="ciRecentLatePayments" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Collection Count<input id="ciCollectionCount" name="ciCollectionCount" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Charge Off Count<input id="ciChargeOffCount" name="ciChargeOffCount" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Repo Count<input id="ciRepoCount" name="ciRepoCount" type="number" min="0" step="1" placeholder="0" /></label>
+            <label>Bankruptcy Present<select id="ciBankruptcyPresent" name="ciBankruptcyPresent"><option value="No">No</option><option value="Yes">Yes</option></select></label>
+          </div>
+
+          <div id="credit-intelligence-preview" class="intelligence-preview" aria-live="polite"></div>
+
+          <div class="form-actions">
+            <button class="primary" type="submit">Save Intelligence Report</button>
+            <button id="reset-credit-intelligence-form" class="secondary" type="button">Clear</button>
+          </div>
+        </form>
+
+        <div id="credit-intelligence-list" class="card-grid empty-state" aria-live="polite"></div>
       </section>
 
 
