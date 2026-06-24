@@ -1152,16 +1152,33 @@ function buildParseConfidence(report) {
   return { score: Math.round(score * 100) / 100, low: score < 0.62, reasons };
 }
 
-function extractScore(normalized, bureau) {
+function extractCreditScoreSection(source) {
+  const lines = String(source || '').split('\n');
+  const start = lines.findIndex((line) => /^\s*credit score\s*$/i.test(line.trim()) || /^\s*credit scores?\b/i.test(line.trim()));
+  if (start < 0) return '';
+  const sectionHeader = /^(?:quick links|personal information|account summary|account history|inquiries|public information|account description|tradelines?|accounts?)\b/i;
+  const section = [];
+  for (let i = start; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (i > start && sectionHeader.test(line)) break;
+    section.push(line);
+  }
+  return section.join(' ');
+}
+
+function extractScore(source, bureau) {
+  const scoreSection = extractCreditScoreSection(source);
+  if (!scoreSection) return '';
   const aliases = {
     equifax: '(?:equifax|eq)',
     experian: '(?:experian|ex)',
     transUnion: '(?:transunion|trans union|tu)',
   }[bureau];
-  return extractNumber(normalized, [
-    new RegExp(`${aliases}[^0-9]{0,40}(?:score|fico|credit score)?[^0-9]{0,20}(\\d{3})`, 'i'),
-    new RegExp(`(?:score|fico)[^\\n]{0,40}${aliases}[^0-9]{0,20}(\\d{3})`, 'i'),
-  ]);
+  const candidates = [
+    ...scoreSection.matchAll(new RegExp(`${aliases}[^0-9]{0,40}(?:score|fico|credit score)?[^0-9]{0,20}(\\d{3})`, 'gi')),
+    ...scoreSection.matchAll(new RegExp(`(?:score|fico)[^\n]{0,40}${aliases}[^0-9]{0,20}(\\d{3})`, 'gi')),
+  ].map((match) => Number(match[1])).filter((score) => score >= 300 && score <= 850);
+  return candidates.length ? String(candidates[0]) : '';
 }
 
 function extractClientName(normalized) {
@@ -1188,35 +1205,88 @@ function extractCurrency(line, labels) {
   return '';
 }
 
+const ignoredAccountNameFields = [
+  'Quick Links', 'Credit Score', 'Personal Information', 'Account Summary', 'Account History', 'Inquiries',
+  'Public Information', 'Account Description', 'Date of Last Activity', 'Date Reported', 'Date Opened',
+  'High Balance', 'Balance Owed', 'Closed Date', 'Account Rating', 'Dispute Status', 'Creditor Type',
+  'Account Status', 'Payment Status', 'Payment Amount', 'Last Payment', 'Term Length', 'Past Due Amount',
+  'Account Type', 'Payment Frequency', 'Credit Limit', 'Two-Year Payment History', 'Days Late', 'Last Verified',
+];
+
+const ignoredAccountNamePattern = new RegExp(`^(?:${ignoredAccountNameFields.map((field) => field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'i');
+const paymentHistoryPattern = /^(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\s']?\d{2,4}|\d{1,3}|ok|co|rf|nr|x|current|collection|closed|open|paid|late)(?:\s+(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\s']?\d{2,4}|\d{1,3}|ok|co|rf|nr|x|current|collection|closed|open|paid|late))*$/i;
+const genericAccountNamePattern = /^(?:individual|joint|authorized user|collection|current|paid|late|closed|open|charge[- ]?off|revolving|installment|mortgage|auto loan|student loan|credit card)$/i;
+const creditorHintPattern = /\b(?:bank|capital|one|chime|stride|childsupport|credit|services|servicing|financial|finance|auto|mortgage|loan|student|card|collection|collections|recovery|receivables|portfolio|midland|lvnv|resurgent|syncb|synchrony|comenity|discover|amex|american express|chase|citi|citibank|wells fargo|navient|nelnet|mohela|sallie mae|ally|santander|toyota|honda|ford|gm financial|exeter|regional acceptance|first|national|federal|union)\b/i;
+
+function normalizeAccountIdentity(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/(?:BANK|NATIONAL|ASSOCIATION|FINANCIAL|FINANCE|SERVICES|SERVICE|SERVICING|LLC|INC|CORP|CORPORATION|COMPANY|CO)$/g, '');
+}
+
+function isValidAccountName(name, sourceLine = '') {
+  const cleaned = String(name || '').replace(/\s+/g, ' ').trim();
+  if (cleaned.length < 3 || cleaned.length > 70) return false;
+  if (!/[A-Za-z]{3}/.test(cleaned)) return false;
+  if (ignoredAccountNamePattern.test(cleaned)) return false;
+  if (paymentHistoryPattern.test(cleaned)) return false;
+  if (genericAccountNamePattern.test(cleaned)) return false;
+  if (/^\d+$/.test(cleaned) || /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(cleaned)) return false;
+  if (/^(?:date|last|high|balance|account|payment|credit|days)\b/i.test(cleaned)) return false;
+  return creditorHintPattern.test(cleaned) || /(?:^|\s)[A-Z&.'/-]{3,}(?:\s+[A-Z&.'/-]{2,}){0,5}(?:\s+#?\*?\d{2,})?/.test(sourceLine);
+}
+
 function extractAccountName(line) {
   const cleaned = line.replace(/\s+/g, ' ').trim();
   const beforeLabels = cleaned.split(/\b(?:Account Type|Type|Balance|Status|Payment Status|Late|Past Due|Opened|Closed|Equifax|Experian|TransUnion|Trans Union|EQ|EX|TU)\b/i)[0].trim();
   const match = beforeLabels.match(/^([A-Z0-9][A-Za-z0-9 &'./#-]{2,70})/);
-  return match ? match[1].trim() : '';
+  const name = match ? match[1].trim().replace(/\s+(?:Individual|Joint|Authorized User)$/i, '') : '';
+  return isValidAccountName(name, line) ? name : '';
 }
 
 function extractAccountDetails(line) {
   const status = extractFirstMatch(line, [/payment status\s*[:\-]?\s*([A-Za-z ]{2,35})/i, /\b(current|paid|late|collection|charge[- ]?off|repossession|closed|open)\b/i]);
-  const bureauTokens = ['Equifax', 'Experian', 'TransUnion'].filter((bureau) => new RegExp(`\\b${bureau}|${bureau === 'TransUnion' ? 'Trans Union|TU' : bureau.slice(0, 2)}\\b`, 'i').test(line));
+  const bureauTokens = ['Equifax', 'Experian', 'TransUnion'].filter((bureau) => new RegExp(`\\b(?:${bureau}|${bureau === 'TransUnion' ? 'Trans Union|TU' : bureau.slice(0, 2)})\\b`, 'i').test(line));
   return {
     name: extractAccountName(line),
+    accountNumber: extractFirstMatch(line, [/(?:account\s*(?:number|#)|acct\s*#?)\s*[:\-]?\s*([A-Z0-9*#-]{2,30})/i]),
     type: extractFirstMatch(line, [/(?:account type|type)\s*[:\-]?\s*([A-Za-z /-]{3,35})/i, /\b(credit card|revolving|installment|auto loan|mortgage|student loan|collection|charge[- ]?off)\b/i]),
     balance: extractCurrency(line, ['balance', 'current balance', 'high balance']),
     paymentStatus: status,
-    latePayments: extractFirstMatch(line, [/(?:late payments?|lates?)\s*[:\-]?\s*([0-9xX ,\/]+|(?:30|60|90|120)\s*days?[^;,.]*)/i]),
+    latePayments: extractFirstMatch(line, [/(?:late payments?|lates?)\s*[:\-]?\s*([0-9xX ,/]+|(?:30|60|90|120)\s*days?[^;,.]*)/i]),
     openClosedStatus: extractFirstMatch(line, [/\b(open|closed)\b/i]),
     utilization: extractFirstMatch(line, [/(?:utilization|util)\s*[:\-]?\s*(\d{1,3}%)/i, /(\d{1,3}%)\s*(?:utilization|util)/i]),
     bureaus: bureauTokens,
   };
 }
 
+function mergeDuplicateAccounts(accounts) {
+  const grouped = new Map();
+  accounts.forEach((account) => {
+    const nameKey = normalizeAccountIdentity(account.name);
+    const numberKey = normalizeAccountIdentity(account.accountNumber).slice(-8);
+    const key = `${nameKey}|${numberKey || account.balance || account.type || ''}`;
+    const existing = grouped.get(key);
+    if (!existing) grouped.set(key, { ...account, bureaus: [...new Set(account.bureaus || [])] });
+    else {
+      existing.bureaus = [...new Set([...(existing.bureaus || []), ...(account.bureaus || [])])];
+      ['type', 'balance', 'paymentStatus', 'latePayments', 'openClosedStatus', 'utilization', 'accountNumber'].forEach((field) => {
+        if (!existing[field] && account[field]) existing[field] = account[field];
+      });
+    }
+  });
+  return [...grouped.values()];
+}
+
 function extractAccounts(normalized) {
-  return normalized.split('\n')
+  const candidates = normalized.split('\n')
     .map((line) => line.trim())
-    .filter((line) => /(?:balance|payment status|account type|\b(?:equifax|experian|transunion|trans union|eq|ex|tu)\b)/i.test(line) && /[A-Za-z]{3}/.test(line))
+    .filter((line) => line && !ignoredAccountNamePattern.test(line) && !paymentHistoryPattern.test(line))
+    .filter((line) => /(?:balance|payment status|account type|account\s*(?:number|#)|acct\s*#|\b(?:equifax|experian|transunion|trans union|eq|ex|tu)\b)/i.test(line) && /[A-Za-z]{3}/.test(line))
     .map(extractAccountDetails)
-    .filter((account) => account.name && (account.balance || account.paymentStatus || account.type || account.bureaus.length))
-    .slice(0, 80);
+    .filter((account) => account.name && isValidAccountName(account.name) && (account.balance || account.paymentStatus || account.type || account.bureaus.length || account.accountNumber));
+  return mergeDuplicateAccounts(candidates).slice(0, 80);
 }
 
 function countByPattern(normalized, patterns) {
@@ -1241,7 +1311,8 @@ function parseCreditReportText(text, file) {
   const accounts = extractAccounts(source);
   const collections = accounts.filter((a) => /collection/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/collections?[^\d]{0,20}(\d+)/i]);
   const chargeOffs = accounts.filter((a) => /charge[- ]?off/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/charge[- ]?offs?[^\d]{0,20}(\d+)/i]);
-  const repossessions = accounts.filter((a) => /repo|repossession/i.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/(?:repossession(?:s)?|repo(?:s)?)[^\d]{0,20}(\d+)/i]);
+  const repoKeywordPattern = /\b(?:REPOSSESSION|AUTO LOAN REPO|FORECLOSURE|REPO|RF)\b/i;
+  const repossessions = repoKeywordPattern.test(normalized) ? (accounts.filter((a) => repoKeywordPattern.test(`${a.type} ${a.paymentStatus} ${a.name}`)).length || countByPattern(normalized, [/(?:repossession(?:s)?|repo(?:s)?|foreclosure|rf)[^\d]{0,20}(\d+)/i]) || 1) : '';
   const latePayments = accounts.filter((a) => a.latePayments || /late|30|60|90|120/i.test(a.paymentStatus)).length || countByPattern(normalized, [/late payments?[^\d]{0,20}(\d+)/i]);
   const report = {
     id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
@@ -1251,7 +1322,7 @@ function parseCreditReportText(text, file) {
     bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
       name: extractClientName(source),
-      scores: { equifax: extractScore(normalized, 'equifax'), experian: extractScore(normalized, 'experian'), transUnion: extractScore(normalized, 'transUnion') },
+      scores: { equifax: extractScore(source, 'equifax'), experian: extractScore(source, 'experian'), transUnion: extractScore(source, 'transUnion') },
       goal: 'Uploaded credit report analysis',
     },
     negative: { collections, chargeOffs, repossessions, latePayments, bankruptcies: extractFirstMatch(normalized, [/bankruptc(?:y|ies)\s*[:\-]\s*([^.;\n]{1,40})/i]) || '', publicRecords: extractNumber(normalized, [/public records?[^\d]{0,20}(\d+)/i]), studentLoans: accounts.filter((a) => /student/i.test(a.type)).length || extractNumber(normalized, [/student loans?[^\d]{0,20}(\d+)/i]) },
