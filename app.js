@@ -1132,14 +1132,72 @@ async function runPdfOcr(pdf) {
   return { text: pages.join('\n'), confidence: confidences.length ? average(confidences) : 0 };
 }
 
+function isHtmlCreditReportFile(file) {
+  return file.type === 'text/html' || /\.html?$/i.test(file.name);
+}
+
+function sanitizeCreditReportHtml(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(html || ''), 'text/html');
+  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link[rel="import"]').forEach((element) => element.remove());
+  doc.querySelectorAll('*').forEach((element) => {
+    [...element.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = String(attribute.value || '').trim().toLowerCase();
+      if (name.startsWith('on') || value.startsWith('javascript:')) element.removeAttribute(attribute.name);
+    });
+  });
+  return doc;
+}
+
+function isHiddenHtmlElement(element) {
+  if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+  if (element.hidden || element.getAttribute('aria-hidden') === 'true') return true;
+  const style = (element.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase();
+  return /display:none|visibility:hidden|opacity:0/.test(style) || element.getAttribute('type') === 'hidden';
+}
+
+function extractVisibleTextFromHtmlDocument(doc) {
+  doc.querySelectorAll('[hidden], [aria-hidden="true"], input[type="hidden"]').forEach((element) => element.remove());
+  doc.querySelectorAll('*').forEach((element) => {
+    if (isHiddenHtmlElement(element)) element.remove();
+  });
+  const walker = doc.createTreeWalker(doc.body || doc.documentElement, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const value = node.nodeValue.replace(/\s+/g, ' ').trim();
+      if (!value) return NodeFilter.FILTER_REJECT;
+      let parent = node.parentElement;
+      while (parent) {
+        if (isHiddenHtmlElement(parent)) return NodeFilter.FILTER_REJECT;
+        parent = parent.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const parts = [];
+  while (walker.nextNode()) parts.push(walker.currentNode.nodeValue.replace(/\s+/g, ' ').trim());
+  return parts.join('\n');
+}
+
+async function extractHtmlReportText(file) {
+  const doc = sanitizeCreditReportHtml(await file.text());
+  return extractVisibleTextFromHtmlDocument(doc);
+}
+
 async function readCreditReportFile(file) {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
     return extractPdfText(await loadPdfDocument(file));
   }
+  if (isHtmlCreditReportFile(file)) return extractHtmlReportText(file);
   return file.text();
 }
 
 async function analyzeCreditReportFile(file) {
+  if (isHtmlCreditReportFile(file)) {
+    setCreditUploadStatus('HTML Report Detected');
+    const text = await extractHtmlReportText(file);
+    return parseCreditReportText(text, file, { extractionMode: 'html-text', htmlReportDetected: true }) || createUnparsedCreditFileReport(file.name, text.length);
+  }
   if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
     const text = await file.text();
     return parseCreditReportText(text, file, { extractionMode: 'text' }) || createUnparsedCreditFileReport(file.name, text.length);
@@ -1499,7 +1557,7 @@ function parseCreditReportText(text, file, options = {}) {
   const report = {
     id: crypto.randomUUID(), fileName: file.name, uploadedAt, sourceLength: source.length,
     uploadStatus: uploadStatuses.analyzed,
-    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
+    metadata: { fileName: file.name, fileType: file.type || 'unknown', fileSize: file.size, uploadedAt, sourceLength: source.length, provider, extractionMode: options.extractionMode || 'text', htmlReportDetected: Boolean(options.htmlReportDetected), ocrConfidence: options.ocrConfidence ?? null, directParseConfidence: options.directParseConfidence || null },
     analysis: 'parsed', verified: true, needsManualReview: false, source: 'upload', accounts,
     bureauReportingDifferences: extractBureauReportingDifferences(accounts),
     clientProfile: {
@@ -1647,8 +1705,8 @@ function renderCreditFileIntelligenceDashboard() {
 
 function handleCreditReportFile(file) {
   if (!file) return;
-  const valid = ['application/pdf', 'text/plain'].includes(file.type) || /\.(pdf|txt)$/i.test(file.name);
-  if (!valid) { setCreditUploadStatus('Please upload a PDF or TXT credit report.'); return; }
+  const valid = ['application/pdf', 'text/plain', 'text/html'].includes(file.type) || /\.(pdf|txt|html?)$/i.test(file.name);
+  if (!valid) { setCreditUploadStatus('Please upload a PDF, TXT, or HTML credit report.'); return; }
   localStorage.removeItem(CREDIT_FILE_INTELLIGENCE_KEY);
   setCreditUploadStatus('Processing report...');
   renderCreditFileIntelligenceDashboard();
@@ -1656,7 +1714,7 @@ function handleCreditReportFile(file) {
   analyzeCreditReportFile(file).then((report) => {
     if (report.needsManualReview) enqueueManualReview(report);
     writeStore(CREDIT_FILE_INTELLIGENCE_KEY, report);
-    setCreditUploadStatus(report.needsManualReview ? (report.parseMessage || parseUnavailableMessage) : uploadStatuses.analyzed);
+    setCreditUploadStatus(report.metadata?.htmlReportDetected ? 'HTML Report Detected' : (report.needsManualReview ? (report.parseMessage || parseUnavailableMessage) : uploadStatuses.analyzed));
     renderCreditFileIntelligenceDashboard();
     if (report.needsManualReview) openManualReviewMode();
   }).catch(() => {

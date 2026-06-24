@@ -412,7 +412,7 @@
           <div>
             <p class="eyebrow">Credit report analysis</p>
             <h2 id="credit-file-intelligence-heading">Credit File Intelligence Center</h2>
-            <p>Upload a PDF or TXT credit report for verified analysis, or enter reviewed details manually before generating dispute, rebuild, mortgage, and client update recommendations.</p>
+            <p>Upload a PDF, TXT, or HTML credit report for verified analysis, or enter reviewed details manually before generating dispute, rebuild, mortgage, and client update recommendations.</p>
           </div>
           <span id="credit-file-intelligence-count" class="count-pill">No analysis</span>
         </div>
@@ -421,12 +421,12 @@
           <div>
             <p class="eyebrow">Upload center</p>
             <h3 id="credit-upload-heading">Credit Report Upload</h3>
-            <p>Drag and drop a PDF or TXT credit report, or choose a file from your device. Analysis is saved in local storage for now.</p>
+            <p>Drag and drop a PDF, TXT, or HTML credit report, or choose a file from your device. Analysis is saved in local storage for now.</p>
           </div>
-          <div id="credit-report-dropzone" class="drop-zone" tabindex="0" role="button" aria-label="Upload PDF or TXT credit report">
+          <div id="credit-report-dropzone" class="drop-zone" tabindex="0" role="button" aria-label="Upload PDF, TXT, or HTML credit report">
             <strong>Drop credit report here</strong>
-            <span>Text PDFs, scanned/image PDFs, and TXT files supported. OCR runs automatically before Manual Review Queue.</span>
-            <input id="credit-report-upload" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
+            <span>Text PDFs, scanned/image PDFs, TXT files, and sanitized HTML exports supported. OCR runs automatically before Manual Review Queue.</span>
+            <input id="credit-report-upload" type="file" accept=".pdf,.txt,.html,.htm,application/pdf,text/plain,text/html" />
             <button id="credit-report-upload-button" class="primary" type="button">Upload Report</button>
             <button id="open-manual-review" class="secondary" type="button">Open Manual Review</button>
             <button id="clear-current-report" class="danger" type="button">Clear Current Report</button>
