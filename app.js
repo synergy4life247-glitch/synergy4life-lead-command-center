@@ -14,6 +14,7 @@ const REVENUE_CENTER_KEY = 'synergy4life.revenueCenter';
 const TEAM_KEY = 'synergy4life.teamMembers';
 const CONTENT_KEY = 'synergy4life.contentCenter';
 const AUTOMATIONS_KEY = 'synergy4life.automations';
+const ONBOARDING_KEY = 'synergy4life.onboarding';
 
 const fields = [
   'platform', 'groupName', 'personName', 'painPoint', 'publicReply', 'ctaUsed',
@@ -81,6 +82,10 @@ const automationCategoryOptions = ['Lead Follow-Up', 'Client Follow-Up', 'Credit
 const automationFrequencyOptions = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Custom'];
 const automationPriorityOptions = ['Low', 'Medium', 'High', 'Critical'];
 const automationStatusOptions = ['Active', 'Paused', 'Completed', 'Overdue'];
+const onboardingServiceOptions = ['Credit Repair', 'Mentorship', 'Backend Solutions', 'Realtor Buyer', 'Realtor Seller', 'Business Credit', 'Consultation', 'Other'];
+const onboardingStatusOptions = ['New Enrollment', 'Waiting Documents', 'Documents Received', 'Analysis Pending', 'Ready For Round 1', 'Active Client', 'Completed'];
+const onboardingChecklistFields = ['agreementSigned', 'invoicePaid', 'identityIqReceived', 'creditReportReceived', 'driverLicenseReceived', 'proofOfAddressReceived', 'portalSetupCompleted', 'welcomeEmailSent', 'initialAnalysisCompleted', 'round1Started'];
+const onboardingFields = ['onboardingClientName', 'onboardingEmail', 'onboardingPhone', 'onboardingService', 'onboardingStatus', 'onboardingEnrollmentDate', 'onboardingAssignedTeamMember', ...onboardingChecklistFields, 'onboardingNotes'];
 const automationFields = ['automationName', 'automationCategory', 'automationDescription', 'automationAssignedTeamMember', 'automationTriggerDate', 'automationFrequency', 'automationLastCompleted', 'automationNextDueDate', 'automationStatus', 'automationPriority', 'automationNotes'];
 
 const form = document.querySelector('#conversation-form');
@@ -176,6 +181,13 @@ const automationSearch = document.querySelector('#automation-search');
 const automationCategoryFilter = document.querySelector('#automation-category-filter');
 const automationStatusFilter = document.querySelector('#automation-status-filter');
 const automationPriorityFilter = document.querySelector('#automation-priority-filter');
+const onboardingForm = document.querySelector('#onboarding-form');
+const onboardingList = document.querySelector('#onboarding-list');
+const onboardingCount = document.querySelector('#onboarding-count');
+const onboardingSearch = document.querySelector('#onboarding-search');
+const onboardingStatusFilter = document.querySelector('#onboarding-status-filter');
+const onboardingServiceFilter = document.querySelector('#onboarding-service-filter');
+const onboardingTeamFilter = document.querySelector('#onboarding-team-filter');
 
 const readStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
 const writeStore = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -1749,6 +1761,122 @@ function renderClientCard(client) {
   return card;
 }
 
+
+function getOnboardingFormData() {
+  return onboardingFields.reduce((data, field) => {
+    const control = document.querySelector(`#${field}`);
+    data[field] = control.type === 'checkbox' ? control.checked : control.value.trim();
+    return data;
+  }, {});
+}
+
+function resetOnboardingForm() {
+  onboardingForm.reset();
+  document.querySelector('#onboarding-id').value = '';
+  document.querySelector('#onboardingService').value = 'Credit Repair';
+  document.querySelector('#onboardingStatus').value = 'New Enrollment';
+}
+
+function calculateOnboardingProgress(record) {
+  return Math.round((onboardingChecklistFields.filter((field) => record[field]).length / onboardingChecklistFields.length) * 100);
+}
+
+function getMissingOnboardingItems(record) {
+  const labels = {
+    agreementSigned: 'Agreement Signed', invoicePaid: 'Invoice Paid', identityIqReceived: 'IdentityIQ Received',
+    creditReportReceived: 'Credit Report Received', driverLicenseReceived: 'Driver License Received',
+    proofOfAddressReceived: 'Proof of Address Received', portalSetupCompleted: 'Portal Setup Completed',
+    welcomeEmailSent: 'Welcome Email Sent', initialAnalysisCompleted: 'Initial Analysis Completed', round1Started: 'Round 1 Started'
+  };
+  return onboardingChecklistFields.filter((field) => !record[field]).map((field) => labels[field]);
+}
+
+function saveOnboardingRecord(event) {
+  event.preventDefault();
+  const records = readStore(ONBOARDING_KEY);
+  const id = document.querySelector('#onboarding-id').value || crypto.randomUUID();
+  const existing = records.findIndex((item) => item.id === id);
+  const previous = existing >= 0 ? records[existing] : {};
+  const data = getOnboardingFormData();
+  const record = {
+    id,
+    ...data,
+    completedAt: data.onboardingStatus === 'Completed' ? (previous.completedAt || new Date().toISOString()) : '',
+    updatedAt: new Date().toISOString(),
+    createdAt: previous.createdAt || new Date().toISOString(),
+  };
+  if (existing >= 0) records[existing] = record;
+  else records.unshift(record);
+  writeStore(ONBOARDING_KEY, records);
+  resetOnboardingForm();
+  render();
+}
+
+function editOnboardingRecord(id) {
+  const record = readStore(ONBOARDING_KEY).find((item) => item.id === id);
+  if (!record) return;
+  document.querySelector('#onboarding-id').value = record.id;
+  onboardingFields.forEach((field) => {
+    const control = document.querySelector(`#${field}`);
+    if (control.type === 'checkbox') control.checked = Boolean(record[field]);
+    else control.value = record[field] || '';
+  });
+  onboardingForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteOnboardingRecord(id) {
+  writeStore(ONBOARDING_KEY, readStore(ONBOARDING_KEY).filter((item) => item.id !== id));
+  render();
+}
+
+function updateOnboardingTeamFilter(records) {
+  const current = onboardingTeamFilter.value;
+  const teams = [...new Set(records.map((record) => record.onboardingAssignedTeamMember).filter(Boolean))].sort();
+  onboardingTeamFilter.innerHTML = '<option value="">All team members</option>' + teams.map((team) => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`).join('');
+  onboardingTeamFilter.value = teams.includes(current) ? current : '';
+}
+
+function getFilteredOnboardingRecords(records) {
+  const query = onboardingSearch.value.trim().toLowerCase();
+  return records.filter((record) => {
+    const searchable = [record.onboardingClientName, record.onboardingEmail, record.onboardingPhone, record.onboardingService, record.onboardingAssignedTeamMember, record.onboardingNotes].join(' ').toLowerCase();
+    return (!query || searchable.includes(query))
+      && (!onboardingStatusFilter.value || record.onboardingStatus === onboardingStatusFilter.value)
+      && (!onboardingServiceFilter.value || record.onboardingService === onboardingServiceFilter.value)
+      && (!onboardingTeamFilter.value || record.onboardingAssignedTeamMember === onboardingTeamFilter.value);
+  });
+}
+
+function renderOnboardingMetrics(records) {
+  document.querySelector('#metric-onboarding-new').textContent = records.filter((record) => record.onboardingStatus === 'New Enrollment').length;
+  document.querySelector('#metric-onboarding-waiting').textContent = records.filter((record) => record.onboardingStatus === 'Waiting Documents').length;
+  document.querySelector('#metric-onboarding-analysis').textContent = records.filter((record) => ['Documents Received', 'Analysis Pending'].includes(record.onboardingStatus)).length;
+  document.querySelector('#metric-onboarding-active').textContent = records.filter((record) => record.onboardingStatus === 'Active Client').length;
+  document.querySelector('#metric-onboarding-completed-month').textContent = records.filter((record) => record.onboardingStatus === 'Completed' && isThisMonth(record.completedAt || record.updatedAt)).length;
+}
+
+function renderOnboardingCard(record) {
+  const progress = calculateOnboardingProgress(record);
+  const missingItems = getMissingOnboardingItems(record);
+  const card = document.createElement('article');
+  card.className = `card onboarding-card ${missingItems.length ? 'onboarding-incomplete' : 'onboarding-complete'}`;
+  card.innerHTML = `
+    <div class="card-topline"><span class="badge">${escapeHtml(record.onboardingService || 'Service')}</span><span class="badge">${escapeHtml(record.onboardingStatus || 'Status')}</span><span class="badge ${missingItems.length ? 'warning-badge' : 'success-badge'}">${progress}% complete</span></div>
+    <h3>${escapeHtml(record.onboardingClientName || 'Unnamed client')}</h3>
+    <p class="group">${escapeHtml(record.onboardingPhone || 'No phone')} • ${escapeHtml(record.onboardingEmail || 'No email')}</p>
+    <div class="progress-track" aria-label="Onboarding progress"><span style="width: ${progress}%"></span></div>
+    ${missingItems.length ? `<p class="missing-alert"><strong>Incomplete file:</strong> ${escapeHtml(missingItems.join(', '))}</p>` : '<p class="complete-alert">All onboarding checklist items are complete.</p>'}
+    <dl>
+      ${detail('Enrollment Date', formatDate(record.onboardingEnrollmentDate))}
+      ${detail('Assigned Team Member', record.onboardingAssignedTeamMember)}
+      ${detail('Notes', record.onboardingNotes)}
+    </dl>
+    <div class="card-actions"><button class="edit secondary" type="button">Edit</button><button class="delete danger" type="button">Delete</button></div>`;
+  card.querySelector('.edit').addEventListener('click', () => editOnboardingRecord(record.id));
+  card.querySelector('.delete').addEventListener('click', () => deleteOnboardingRecord(record.id));
+  return card;
+}
+
 function getFormData() {
   return fields.reduce((data, field) => {
     data[field] = document.querySelector(`#${field}`).value.trim();
@@ -1875,7 +2003,7 @@ function renderLeadCard(lead) {
 }
 
 
-function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers = [], automations = [] }) {
+function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers = [], automations = [], onboardingRecords = [] }) {
   const totalLeadCount = leads.length + pipelineLeads.length;
   const hotLeads = leads.filter((lead) => lead.temperature === 'Hot').length + pipelineLeads.filter((lead) => ['Enrolled', 'Active Client'].includes(lead.pipelineStage)).length;
   const coldLeads = leads.filter((lead) => lead.temperature === 'Cold').length + pipelineLeads.filter((lead) => lead.pipelineStage === 'Lost Lead').length;
@@ -1914,6 +2042,13 @@ function calculateDashboardMetrics({ leads, clients, pipelineLeads, creditFiles,
     pipeline: [ ['Leads by Stage', pipelineStages.map((stage) => `${stage}: ${pipelineLeads.filter((lead) => lead.pipelineStage === stage).length}`).join(' • ')], ['Estimated Revenue', formatCurrency(estimatedRevenue)], ['Closed Deals', closedDeals], ['Conversion Rate', formatPercent(totalLeadCount ? (closedDeals / totalLeadCount) * 100 : 0)] ],
     documents: [ ['Total Documents', documents.length], ['Pending Review', documents.filter((documentRecord) => documentRecord.documentStatus === 'Pending Review').length], ['Uploaded Today', documents.filter((documentRecord) => documentRecord.documentUploadDate === todayDateString()).length], ['Document Clients', new Set(documents.map((documentRecord) => documentRecord.documentClientName).filter(Boolean)).size] ],
     communications: [ ['Total Communications', communications.length], ['Calls Today', communications.filter((item) => item.communicationType === 'Call' && (item.communicationDateTime || '').slice(0, 10) === todayDateString()).length], ['Follow-Ups Due', communications.filter((item) => isFollowUpDue(item.communicationFollowUpDate)).length], ['Appointments Set', communications.filter((item) => item.communicationOutcome === 'Appointment Set').length] ],
+    onboarding: [
+      ['New Enrollments', String(onboardingRecords.filter((record) => record.onboardingStatus === 'New Enrollment').length)],
+      ['Waiting Documents', String(onboardingRecords.filter((record) => record.onboardingStatus === 'Waiting Documents').length)],
+      ['Ready For Analysis', String(onboardingRecords.filter((record) => ['Documents Received', 'Analysis Pending'].includes(record.onboardingStatus)).length)],
+      ['Active Clients', String(onboardingRecords.filter((record) => record.onboardingStatus === 'Active Client').length)],
+      ['Completed This Month', String(onboardingRecords.filter((record) => record.onboardingStatus === 'Completed' && isThisMonth(record.completedAt || record.updatedAt)).length)],
+    ],
     financial: [ ['Total Revenue', formatCurrency(revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue)], ['Monthly Revenue', formatCurrency(monthlyRevenue)], ['Total Expenses', formatCurrency(revenueCenterTotalExpenses)], ['Net Profit', formatCurrency((revenueCenterIncome.length ? revenueCenterTotalRevenue : monthlyRevenue) - revenueCenterTotalExpenses)] ],
     team: [ ['Total Team Members', teamMembers.length], ['Active Team Members', teamMembers.filter((member) => member.teamStatus === 'Active').length], ['Team Productivity Score', teamMembers.reduce((sum, member) => sum + teamProductivityScore(member), 0)] ],
     automations: [ ['Active Automations', automations.filter((item) => item.automationStatus === 'Active').length], ['Due Today', automations.filter((item) => item.automationNextDueDate === todayDateString() && item.automationStatus !== 'Completed').length], ['Overdue', automations.filter((item) => item.automationStatus === 'Overdue').length], ['Completed This Month', automations.filter((item) => item.automationStatus === 'Completed' && isThisMonth(item.automationLastCompleted || item.updatedAt)).length] ],
@@ -1936,6 +2071,7 @@ function renderDashboard(data) {
   const metrics = calculateDashboardMetrics(data);
   const groups = [
     ['LEADS', metrics.leads], ['CLIENTS', metrics.clients], ['TASKS', metrics.tasks], ['AUTOMATIONS', metrics.automations],
+    ['ONBOARDING', metrics.onboarding],
     ['CREDIT FILES', metrics.creditFiles], ['DOCUMENTS', metrics.documents], ['COMMUNICATIONS', metrics.communications], ['TEAM', metrics.team], ['PIPELINE', metrics.pipeline], ['FINANCIAL METRICS', metrics.financial],
   ];
   dashboardSections.innerHTML = groups.map(([title, items]) => `
@@ -1965,6 +2101,7 @@ function render() {
   const teamMembers = getTeamMembers();
   const contentItems = getContentItems();
   const automations = getAutomations();
+  const onboardingRecords = readStore(ONBOARDING_KEY);
   conversationCount.textContent = `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`;
   leadCount.textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'}`;
   clientCount.textContent = `${clients.length} client${clients.length === 1 ? '' : 's'}`;
@@ -1979,6 +2116,7 @@ function render() {
   teamCount.textContent = `${teamMembers.length} team member${teamMembers.length === 1 ? '' : 's'}`;
   contentCount.textContent = `${contentItems.length} content item${contentItems.length === 1 ? '' : 's'}`;
   automationCount.textContent = `${automations.length} automation${automations.length === 1 ? '' : 's'}`;
+  onboardingCount.textContent = `${onboardingRecords.length} record${onboardingRecords.length === 1 ? '' : 's'}`;
   updateFilterOptions(clients);
   renderClientMetrics(clients);
   renderPipelineMetrics(pipelineLeads);
@@ -1995,9 +2133,11 @@ function render() {
   renderTeamMetrics(teamMembers);
   renderContentMetrics(contentItems);
   renderAutomationMetrics(automations);
+  updateOnboardingTeamFilter(onboardingRecords);
+  renderOnboardingMetrics(onboardingRecords);
   renderContentCalendar(contentItems);
   renderTeamRankings(teamMembers);
-  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers, automations });
+  renderDashboard({ leads, clients, pipelineLeads, creditFiles, tasks, mortgageReadiness, creditIntelligence, documents, communications, revenueRecords, teamMembers, automations, onboardingRecords });
   conversationList.innerHTML = '';
   leadList.innerHTML = '';
   clientList.innerHTML = '';
@@ -2013,6 +2153,7 @@ function render() {
   contentList.innerHTML = '';
   contentIdeaBank.innerHTML = '';
   automationList.innerHTML = '';
+  onboardingList.innerHTML = '';
   renderPipelineBoard(pipelineLeads);
 
   if (!creditIntelligence.length) creditIntelligenceList.innerHTML = '<p class="empty-message">No credit intelligence reports yet. Analyze a client credit profile above.</p>';
@@ -2049,6 +2190,10 @@ function render() {
   const filteredAutomations = getFilteredAutomations(automations);
   if (!filteredAutomations.length) automationList.innerHTML = '<p class="empty-message">No automations match your current view. Add an automation or adjust your filters.</p>';
   filteredAutomations.forEach((automation) => automationList.append(renderAutomationCard(automation)));
+
+  const filteredOnboardingRecords = getFilteredOnboardingRecords(onboardingRecords);
+  if (!filteredOnboardingRecords.length) onboardingList.innerHTML = '<p class="empty-message">No onboarding records match your current view. Add a client onboarding file or adjust your filters.</p>';
+  filteredOnboardingRecords.forEach((record) => onboardingList.append(renderOnboardingCard(record)));
 
   const filteredTeamMembers = getFilteredTeamMembers(teamMembers);
   if (!filteredTeamMembers.length) teamList.innerHTML = '<p class="empty-message">No team members match your current view. Add a team member or adjust your filters.</p>';
@@ -2126,6 +2271,10 @@ seedSelect(document.querySelector('#teamStatus'), teamStatusOptions);
 seedSelect(document.querySelector('#teamPayType'), teamPayTypeOptions);
 seedSelect(teamRoleFilter, teamRoleOptions, 'All roles');
 seedSelect(teamStatusFilter, teamStatusOptions, 'All statuses');
+seedSelect(document.querySelector('#onboardingService'), onboardingServiceOptions);
+seedSelect(document.querySelector('#onboardingStatus'), onboardingStatusOptions);
+seedSelect(onboardingServiceFilter, onboardingServiceOptions, 'All services');
+seedSelect(onboardingStatusFilter, onboardingStatusOptions, 'All statuses');
 seedSelect(document.querySelector('#automationCategory'), automationCategoryOptions);
 seedSelect(document.querySelector('#automationFrequency'), automationFrequencyOptions);
 seedSelect(document.querySelector('#automationStatus'), automationStatusOptions);
@@ -2148,6 +2297,7 @@ expenseForm.addEventListener('submit', saveExpense);
 teamForm.addEventListener('submit', saveTeamMember);
 contentForm.addEventListener('submit', saveContent);
 automationForm.addEventListener('submit', saveAutomation);
+onboardingForm.addEventListener('submit', saveOnboardingRecord);
 document.querySelector('#reset-form').addEventListener('click', resetForm);
 document.querySelector('#reset-client-form').addEventListener('click', resetClientForm);
 document.querySelector('#reset-pipeline-form').addEventListener('click', resetPipelineForm);
@@ -2161,6 +2311,7 @@ document.querySelector('#reset-expense-form').addEventListener('click', resetExp
 document.querySelector('#reset-team-form').addEventListener('click', resetTeamForm);
 document.querySelector('#reset-content-form').addEventListener('click', resetContentForm);
 document.querySelector('#reset-automation-form').addEventListener('click', resetAutomationForm);
+document.querySelector('#reset-onboarding-form').addEventListener('click', resetOnboardingForm);
 document.querySelector('#reset-mortgage-readiness-form').addEventListener('click', resetMortgageReadinessForm);
 creditIntelligenceFields.forEach((field) => {
   const control = document.querySelector(`#${field}`);
@@ -2185,9 +2336,11 @@ revenueSearch.addEventListener('input', render);
 teamSearch.addEventListener('input', render);
 contentSearch.addEventListener('input', render);
 automationSearch.addEventListener('input', render);
+onboardingSearch.addEventListener('input', render);
 [teamRoleFilter, teamStatusFilter].forEach((control) => control.addEventListener('change', render));
 [contentPlatformFilter, contentTypeFilter, contentCtaFilter, contentStatusFilter].forEach((control) => control.addEventListener('change', render));
 [automationCategoryFilter, automationStatusFilter, automationPriorityFilter].forEach((control) => control.addEventListener('change', render));
+[onboardingStatusFilter, onboardingServiceFilter, onboardingTeamFilter].forEach((control) => control.addEventListener('change', render));
 [creditGoalFilter, creditStatusFilter, creditStageFilter, creditMortgageFilter].forEach((control) => control.addEventListener('change', render));
 [taskStatusFilter, taskPriorityFilter, taskSourceFilter].forEach((control) => control.addEventListener('change', render));
 [documentCategoryFilter, documentClientFilter].forEach((control) => control.addEventListener('change', render));
@@ -2201,4 +2354,5 @@ resetExpenseForm();
 resetTeamForm();
 resetContentForm();
 resetAutomationForm();
+resetOnboardingForm();
 render();
